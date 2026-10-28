@@ -21,7 +21,9 @@ def test_gmail_mailer_sends_multipart_over_tls_with_app_password():
 def test_gmail_credentials_and_recipients_come_from_env_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     for name in ("GMAIL_ADDRESS", "GMAIL_APP_PASSWORD", "RECIPIENTS"):
-        monkeypatch.delenv(f"ARXIV_TLDR_{name}", raising=False)
+        # load_dotenv writes os.environ directly; register the variable so it is undone.
+        monkeypatch.setenv(f"ARXIV_TLDR_{name}", "")
+        monkeypatch.delenv(f"ARXIV_TLDR_{name}")
     (tmp_path / ".env").write_text(
         "ARXIV_TLDR_GMAIL_ADDRESS=me@gmail.com\nARXIV_TLDR_GMAIL_APP_PASSWORD=pw\n"
         "ARXIV_TLDR_RECIPIENTS=a@x.org, b@x.org\n"

@@ -26,7 +26,21 @@ from .triage import triage
 log = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
 # What makes a whole attempt worth retrying: the host, a feed, or the network is down.
-RETRYABLE = (OllamaUnreachable, FeedError, httpx.TransportError)
+
+
+class AttemptFailed(Exception):
+    """An attempt finished without a usable result (nothing triaged, or Gmail rejected the send)."""
+
+
+RETRYABLE = (OllamaUnreachable, FeedError, httpx.TransportError, AttemptFailed)
+
+
+def current_announcement(clock: Callable[[], datetime], config: Config) -> date:
+    """The Announcement whose retry window is open now: before the cutoff time (Eastern) it is
+    still the previous day's, so a catch-up run after midnight resolves correctly."""
+    hour, minute = map(int, config.cutoff.split(":"))
+    now = clock().astimezone(EASTERN)
+    return (now - timedelta(hours=hour, minutes=minute)).date()
 
 
 def cutoff_time(announcement: date, config: Config) -> datetime:
@@ -128,23 +142,34 @@ def run(
     if store.digest_sent(announcement) or store.failure_notice(announcement) is not None:
         return
     cutoff = cutoff_time(announcement, config)
+    processed = False
     while True:
         try:
-            fetch(announcement, config=config, client=client, store=store, clock=clock)
-            if not store.candidates(announcement):
-                return
-            triage_step(announcement, config=config, client=client, store=store)
-            summarize_step(announcement, config=config, client=client, store=store)
-            break
+            if not processed:
+                # Candidates already stored (an earlier attempt got this far) need no refetch.
+                if not store.candidates(announcement):
+                    fetch(announcement, config=config, client=client, store=store, clock=clock)
+                    if not store.candidates(announcement):
+                        return
+                triage_step(announcement, config=config, client=client, store=store)
+                if not store.triaged(announcement):
+                    raise AttemptFailed("no Candidate could be triaged (invalid model output)")
+                summarize_step(announcement, config=config, client=client, store=store)
+                processed = True
+            send_step(
+                announcement, config=config, mailer=mailer, clock=clock, store=store,
+                started=started,
+            )
+            if not store.digest_sent(announcement):
+                raise AttemptFailed("the mail server rejected the Digest")
+            return
         except RETRYABLE as exc:
             log.warning("attempt for %s failed: %s", announcement, exc)
             if clock() >= cutoff:
+                # If Gmail is the problem the notice cannot help; it is logged either way.
                 send_failure_notice(
                     announcement, reason=str(exc), config=config, mailer=mailer,
                     clock=clock, store=store,
                 )
                 return
             sleep(config.retry_interval_minutes * 60)
-    send_step(
-        announcement, config=config, mailer=mailer, clock=clock, store=store, started=started
-    )

@@ -17,6 +17,10 @@ CHARS_PER_TOKEN = 3
 ENV_PREFIX = "ARXIV_TLDR_"
 
 
+class ConfigError(Exception):
+    """A setting needed by the command is missing."""
+
+
 class Config(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -36,6 +40,20 @@ class Config(BaseModel):
     recipients: tuple[str, ...] = ()
     gmail_address: str = ""
     gmail_app_password: str = ""
+
+    def require_mail(self, *, credentials: bool) -> None:
+        """Fail fast if the settings needed to send mail are missing."""
+        missing = [
+            ENV_PREFIX + name.upper()
+            for name, value in (
+                ("recipients", self.recipients),
+                *((("gmail_address", self.gmail_address),
+                   ("gmail_app_password", self.gmail_app_password)) if credentials else ()),
+            )
+            if not value
+        ]
+        if missing:
+            raise ConfigError(f"missing mail settings: {', '.join(missing)}")
 
     @property
     def text_budget_chars(self) -> int:

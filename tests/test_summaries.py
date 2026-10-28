@@ -6,6 +6,7 @@ import pytest
 from arxiv_tldr.config import Config
 from arxiv_tldr.pipeline import run
 
+from test_failures import AFTER_CUTOFF, Time
 from conftest import (
     FakeMailer, SUMMARY_FIELDS, combined_transport, html_handler, ollama_handler, rss_handler,
 )
@@ -112,8 +113,9 @@ def test_rerun_after_failed_send_does_not_resummarize(tmp_path, clock):
         def send(self, message):
             raise RuntimeError("smtp down")
 
-    run(D, config=config, client=client, mailer=Flaky(), clock=clock)  # logged, not raised
+    t = Time(AFTER_CUTOFF)  # retried to the cutoff; the rejection is logged, not raised
+    run(D, config=config, client=client, mailer=Flaky(), clock=t.clock, sleep=t.sleep)
     assert len(summary_requests(requests)) == 2
-    run(D, config=config, client=client, mailer=mailer, clock=clock)
+    run(D, config=config, client=client, mailer=mailer, clock=t.clock)
     assert len(summary_requests(requests)) == 2
     assert "Rough paths forecast volatility." in mailer.sent[0].html

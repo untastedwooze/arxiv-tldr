@@ -138,8 +138,30 @@ def test_rejected_send_is_logged_and_the_digest_stays_unsent(tmp_path, clock, ca
             raise RuntimeError("Gmail rejected the message")
 
     with caplog.at_level(logging.ERROR):
-        run(D, config=config, client=client, mailer=Rejecting(), clock=clock)
+        t = Time(AFTER_CUTOFF)
+        run(D, config=config, client=client, mailer=Rejecting(), clock=t.clock, sleep=t.sleep)
     assert "Gmail rejected the message" in caplog.text
     assert not Store(config.db_path).digest_sent(D)
-    run(D, config=config, client=client, mailer=mailer, clock=clock)
+    run(D, config=config, client=client, mailer=mailer, clock=t.clock)
     assert len(mailer.sent) == 1
+
+
+def test_rejected_digest_is_retried_until_the_cutoff(tmp_path):
+    config, client, mailer, requests = setup(tmp_path)
+    t = Time(BEFORE_CUTOFF)
+    state = {"rejecting": True}
+
+    class Flaky:
+        def send(self, message):
+            if state["rejecting"]:
+                raise RuntimeError("Gmail rejected the message")
+            mailer.send(message)
+
+    def sleep(seconds):
+        t.sleep(seconds)
+        state["rejecting"] = len(t.slept) < 2
+
+    run(D, config=config, client=client, mailer=Flaky(), clock=t.clock, sleep=sleep)
+    assert t.slept == [1200, 1200]
+    assert len(mailer.sent) == 1 and "3 featured" in mailer.sent[0].subject
+    assert len(requests) == 4 + 3  # only the send was retried

@@ -1,6 +1,7 @@
 """Command-line entry point: ``arxiv-tldr fetch YYYY-MM-DD``."""
 
 import argparse
+import sys
 import time
 from collections.abc import Callable, Sequence
 from contextlib import nullcontext
@@ -8,10 +9,10 @@ from datetime import date, datetime, timezone
 
 import httpx
 
-from .config import load_config
+from .config import ConfigError, load_config
 from .feed import fetch
 from .mailer import GmailMailer, Mailer
-from .pipeline import EASTERN, run, send_step, summarize_step, triage_step
+from .pipeline import current_announcement, run, send_step, summarize_step, triage_step
 from .store import Store
 
 
@@ -44,11 +45,17 @@ def main(
 
     config = load_config()
     clock = clock or (lambda: datetime.now(timezone.utc))
+    if args.command in ("run", "send"):
+        try:
+            config.require_mail(credentials=mailer is None)
+        except ConfigError as exc:
+            print(f"arxiv-tldr: {exc}", file=sys.stderr)
+            return 2
     # An injected client belongs to the caller, so it is not closed here.
     with nullcontext(client) if client else httpx.Client(timeout=30, follow_redirects=True) as http:
         if args.command == "run":
             mailer = mailer or GmailMailer(config.gmail_address, config.gmail_app_password)
-            announcement = args.announcement or clock().astimezone(EASTERN).date()
+            announcement = args.announcement or current_announcement(clock, config)
             run(
                 announcement, config=config, client=http, mailer=mailer, clock=clock,
                 sleep=sleep or time.sleep,

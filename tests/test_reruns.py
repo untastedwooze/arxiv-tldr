@@ -5,6 +5,7 @@ from arxiv_tldr.cli import main
 from arxiv_tldr.pipeline import run
 
 from conftest import combined_transport, ollama_handler, rss_handler
+from test_failures import AFTER_CUTOFF, Time
 from test_run import FEEDS, OLLAMA_URL, SCORES, setup
 
 D = date(2026, 10, 26)
@@ -91,7 +92,8 @@ def test_rejected_send_leaves_digest_unsent_and_later_send_delivers(tmp_path, cl
     config, client, mailer, requests = setup(tmp_path)
     monkeypatch.chdir(tmp_path)
     write_config(tmp_path)
-    main(["run", D_ARG], client=client, clock=clock, mailer=RejectingMailer())
+    t = Time(AFTER_CUTOFF)
+    main(["run", D_ARG], client=client, clock=t.clock, mailer=RejectingMailer(), sleep=t.sleep)
     n = len(requests)
     assert main(["send", D_ARG], client=client, clock=clock, mailer=mailer) == 0
     assert len(mailer.sent) == 1
