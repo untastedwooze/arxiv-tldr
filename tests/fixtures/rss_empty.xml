@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<rss xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+<channel>
+<title>empty updates on arXiv.org</title>
+<link>http://rss.arxiv.org/rss/empty</link>
+<description>empty updates on the arXiv.org e-print archive.</description>
+<pubDate>Mon, 26 Oct 2026 04:00:00 +0000</pubDate>
+</channel>
+</rss>
