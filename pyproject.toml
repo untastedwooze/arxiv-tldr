@@ -27,3 +27,4 @@ packages = ["src/arxiv_tldr"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["live: hits real Ollama; needs ARXIV_TLDR_LIVE=1"]
