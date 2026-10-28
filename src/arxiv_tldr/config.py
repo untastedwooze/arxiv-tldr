@@ -26,6 +26,8 @@ class Config(BaseModel):
     ollama_model: str = "qwen3:30b-a3b-instruct-2507-q4_K_M"
     threshold: int = 7
     cap: int = 15
+    cutoff: str = "04:00"  # US Eastern, the morning after the Announcement
+    retry_interval_minutes: int = 20
     recipients: tuple[str, ...] = ()
     gmail_address: str = ""
     gmail_app_password: str = ""

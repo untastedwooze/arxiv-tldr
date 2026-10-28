@@ -4,19 +4,35 @@ Each step is a function that does only the work with no stored result, so any st
 rerun safely and ``run`` is just the steps in order.
 """
 
+import logging
+import time
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
 
 from .config import Config
 from .digest import render_digest
-from .feed import fetch
-from .llm import OllamaClient
+from .feed import FeedError, fetch
+from .llm import OllamaClient, OllamaUnreachable
 from .mailer import Mailer
+from .notice import render_failure_notice
 from .selection import select
 from .store import Store
 from .triage import triage
+
+log = logging.getLogger(__name__)
+EASTERN = ZoneInfo("America/New_York")
+# What makes a whole attempt worth retrying: the host, a feed, or the network is down.
+RETRYABLE = (OllamaUnreachable, FeedError, httpx.TransportError)
+
+
+def cutoff_time(announcement: date, config: Config) -> datetime:
+    """When to stop retrying: the configured Eastern time on the morning after."""
+    hour, minute = map(int, config.cutoff.split(":"))
+    morning = announcement + timedelta(days=1)
+    return datetime(morning.year, morning.month, morning.day, hour, minute, tzinfo=EASTERN)
 
 
 def triage_step(
@@ -51,12 +67,35 @@ def send_step(
         duration_seconds=(clock() - started).total_seconds(),
         failure_count=len(store.candidates(announcement)) - len(triaged),
     )
-    mailer.send(message)  # raises if not accepted; the Digest is then left unsent
+    try:
+        mailer.send(message)
+    except Exception:
+        # Left unsent so a later attempt can retry; the log is the only signal if Gmail is down.
+        log.exception("mailer rejected the Digest for %s", announcement)
+        return False
     store.mark_digest_sent(
         announcement, featured=len(selection.featured), overflow=len(selection.overflow),
         sent_at=clock(),
     )
     return True
+
+
+def send_failure_notice(
+    announcement: date, *, reason: str, config: Config, mailer: Mailer,
+    clock: Callable[[], datetime], store: Store,
+) -> None:
+    """Send a Failure Notice (once) and record it against the Announcement date."""
+    if store.failure_notice(announcement) is not None:
+        return
+    message = render_failure_notice(
+        announcement, reason=reason, recipients=list(config.recipients)
+    )
+    try:
+        mailer.send(message)
+    except Exception:
+        log.exception("mailer rejected the Failure Notice for %s: %s", announcement, reason)
+        return
+    store.record_failure_notice(announcement, reason=reason, sent_at=clock())
 
 
 def run(
@@ -67,15 +106,35 @@ def run(
     mailer: Mailer,
     clock: Callable[[], datetime],
     store: Store | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> None:
-    """Process an Announcement end to end. Safe to rerun: finished work is skipped."""
+    """Process an Announcement end to end. Safe to rerun: finished work is skipped.
+
+    If piglet or the feeds are failing, retry every ``retry_interval_minutes`` until the
+    cutoff, then send a Failure Notice. Empty feeds mean there was no Announcement: send nothing.
+    """
     started = clock()
     store = store or Store(config.db_path)
-    if store.digest_sent(announcement):
+    if store.digest_sent(announcement) or store.failure_notice(announcement) is not None:
         return
-    fetch(announcement, config=config, client=client, store=store, clock=clock)
-    triage_step(announcement, config=config, client=client, store=store)
-    summarize_step(announcement, config=config, client=client, store=store)
+    cutoff = cutoff_time(announcement, config)
+    while True:
+        try:
+            fetch(announcement, config=config, client=client, store=store, clock=clock)
+            if not store.candidates(announcement):
+                return
+            triage_step(announcement, config=config, client=client, store=store)
+            summarize_step(announcement, config=config, client=client, store=store)
+            break
+        except RETRYABLE as exc:
+            log.warning("attempt for %s failed: %s", announcement, exc)
+            if clock() >= cutoff:
+                send_failure_notice(
+                    announcement, reason=str(exc), config=config, mailer=mailer,
+                    clock=clock, store=store,
+                )
+                return
+            sleep(config.retry_interval_minutes * 60)
     send_step(
         announcement, config=config, mailer=mailer, clock=clock, store=store, started=started
     )

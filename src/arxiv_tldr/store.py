@@ -44,6 +44,11 @@ CREATE TABLE IF NOT EXISTS digests (
     overflow_count INTEGER NOT NULL,
     sent_at TEXT                         -- NULL until the mail server accepts the message
 );
+CREATE TABLE IF NOT EXISTS failure_notices (
+    announcement_date TEXT PRIMARY KEY,
+    reason TEXT NOT NULL,
+    sent_at TEXT                         -- NULL until the mail server accepts the notice
+);
 """
 
 
@@ -184,6 +189,24 @@ class Store:
                 "INSERT OR REPLACE INTO digests VALUES (?,?,?,?)",
                 (announcement.isoformat(), featured, overflow, sent_at.isoformat()),
             )
+
+    def record_failure_notice(
+        self, announcement: date, *, reason: str, sent_at: datetime | None
+    ) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO failure_notices VALUES (?,?,?)",
+                (announcement.isoformat(), reason, sent_at.isoformat() if sent_at else None),
+            )
+
+    def failure_notice(self, announcement: date) -> str | None:
+        """The reason given in the Failure Notice for this Announcement, if one was sent."""
+        row = self._db.execute(
+            "SELECT reason FROM failure_notices WHERE announcement_date = ? "
+            "AND sent_at IS NOT NULL",
+            (announcement.isoformat(),),
+        ).fetchone()
+        return row["reason"] if row else None
 
 
 _JSON_FIELDS = {"authors", "cross_list_categories"}

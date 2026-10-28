@@ -1,6 +1,7 @@
 """Command-line entry point: ``arxiv-tldr fetch YYYY-MM-DD``."""
 
 import argparse
+import time
 from collections.abc import Callable, Sequence
 from contextlib import nullcontext
 from datetime import date, datetime, timezone
@@ -20,6 +21,7 @@ def main(
     client: httpx.Client | None = None,
     clock: Callable[[], datetime] | None = None,
     mailer: Mailer | None = None,
+    sleep: Callable[[float], None] | None = None,
 ) -> int:
     """Run a subcommand. ``client``, ``clock`` and ``mailer`` are the injected seams."""
     parser = argparse.ArgumentParser(prog="arxiv-tldr")
@@ -43,7 +45,10 @@ def main(
     with nullcontext(client) if client else httpx.Client(timeout=30, follow_redirects=True) as http:
         if args.command == "run":
             mailer = mailer or GmailMailer(config.gmail_address, config.gmail_app_password)
-            run(args.announcement, config=config, client=http, mailer=mailer, clock=clock)
+            run(
+                args.announcement, config=config, client=http, mailer=mailer, clock=clock,
+                sleep=sleep or time.sleep,
+            )
             return 0
         if args.command in ("triage", "summarize", "send"):
             store = Store(config.db_path)

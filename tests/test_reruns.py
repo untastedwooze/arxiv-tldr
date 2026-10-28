@@ -1,10 +1,7 @@
 from datetime import date
 
 import httpx
-import pytest
-
 from arxiv_tldr.cli import main
-from arxiv_tldr.llm import OllamaUnreachable
 from arxiv_tldr.pipeline import run
 
 from conftest import combined_transport, ollama_handler, rss_handler
@@ -58,13 +55,14 @@ def test_crash_partway_through_triage_resumes_without_redoing_work(tmp_path, clo
         return response
 
     client = httpx.Client(transport=combined_transport(rss_handler(FEEDS), flaky))
-    with pytest.raises(OllamaUnreachable):
-        run(D, config=config, client=client, mailer=mailer, clock=clock)
-    assert mailer.sent == []
-    assert len(calls) == 3  # two finished, the third crashed
+    sleeps = []
 
-    state["crash"] = False
-    run(D, config=config, client=client, mailer=mailer, clock=clock)
+    def sleep(seconds):  # piglet comes back while the run waits to retry
+        sleeps.append(seconds)
+        state["crash"] = False
+
+    run(D, config=config, client=client, mailer=mailer, clock=clock, sleep=sleep)
+    assert sleeps == [1200]
     assert len(calls) == 3 + 2  # the crashed one and the remaining one only
     assert len(mailer.sent) == 1
     run(D, config=config, client=client, mailer=mailer, clock=clock)
@@ -92,8 +90,7 @@ def test_rejected_send_leaves_digest_unsent_and_later_send_delivers(tmp_path, cl
     config, client, mailer, requests = setup(tmp_path)
     monkeypatch.chdir(tmp_path)
     write_config(tmp_path)
-    with pytest.raises(RuntimeError):
-        main(["run", D_ARG], client=client, clock=clock, mailer=RejectingMailer())
+    main(["run", D_ARG], client=client, clock=clock, mailer=RejectingMailer())
     n = len(requests)
     assert main(["send", D_ARG], client=client, clock=clock, mailer=mailer) == 0
     assert len(mailer.sent) == 1
