@@ -26,6 +26,7 @@ class Config(BaseModel):
     ollama_model: str = "qwen3:30b-a3b-instruct-2507-q4_K_M"
     threshold: int = 7
     cap: int = 15
+    num_ctx: int = 32768  # context window requested for every Summary call
     recipients: tuple[str, ...] = ()
     gmail_address: str = ""
     gmail_app_password: str = ""
