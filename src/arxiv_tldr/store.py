@@ -31,6 +31,13 @@ CREATE TABLE IF NOT EXISTS triage_results (
     seconds REAL NOT NULL,
     PRIMARY KEY (announcement_date, arxiv_id)
 );
+CREATE TABLE IF NOT EXISTS call_timings (
+    announcement_date TEXT NOT NULL,
+    kind TEXT NOT NULL,                  -- "triage" or "summary"
+    arxiv_id TEXT NOT NULL,
+    seconds REAL NOT NULL,
+    PRIMARY KEY (announcement_date, kind, arxiv_id)
+);
 CREATE TABLE IF NOT EXISTS digests (
     announcement_date TEXT PRIMARY KEY,
     featured_count INTEGER NOT NULL,
@@ -58,6 +65,12 @@ class TriagedCandidate(BaseModel):
     score: int
     rationale: str
     model: str
+
+
+class CallTiming(BaseModel):
+    kind: str  # "triage" or "summary"
+    arxiv_id: str
+    seconds: float
 
 
 class Store:
@@ -122,6 +135,25 @@ class Store:
                 "INSERT OR IGNORE INTO triage_results VALUES (?,?,?,?,?,?)",
                 (announcement.isoformat(), arxiv_id, score, rationale, model, seconds),
             )
+        self.add_call_timing(announcement, "triage", arxiv_id, seconds)
+
+    def add_call_timing(
+        self, announcement: date, kind: str, arxiv_id: str, seconds: float
+    ) -> None:
+        """Record how long one LLM call took (kind: "triage" or "summary")."""
+        with self._db:
+            self._db.execute(
+                "INSERT OR IGNORE INTO call_timings VALUES (?,?,?,?)",
+                (announcement.isoformat(), kind, arxiv_id, seconds),
+            )
+
+    def call_timings(self, announcement: date) -> list[CallTiming]:
+        rows = self._db.execute(
+            "SELECT kind, arxiv_id, seconds FROM call_timings WHERE announcement_date = ? "
+            "ORDER BY kind DESC, arxiv_id",
+            (announcement.isoformat(),),
+        )
+        return [CallTiming(**dict(r)) for r in rows]
 
     def triaged(self, announcement: date) -> list[TriagedCandidate]:
         by_id = {c.arxiv_id: c for c in self.candidates(announcement)}

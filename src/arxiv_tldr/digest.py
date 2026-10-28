@@ -14,6 +14,12 @@ def authors_line(authors: list[str]) -> str:
     return f"{shown} et al." if len(authors) > 3 else shown
 
 
+def format_duration(seconds: float) -> str:
+    whole = round(seconds)
+    minutes, secs = divmod(whole, 60)
+    return f"{minutes}m {secs}s" if minutes else f"{secs}s"
+
+
 _env = Environment(
     loader=PackageLoader("arxiv_tldr", "templates"),
     autoescape=select_autoescape(["html"]),
@@ -25,14 +31,17 @@ _env.globals["authors_line"] = authors_line
 
 def render_digest(
     announcement: date, selection: Selection, *, triaged_count: int, model: str,
-    recipients: list[str],
+    recipients: list[str], duration_seconds: float = 0, failure_count: int = 0,
 ) -> Message:
     context = {
         "announcement": announcement,
+        "announcement_label": f"{announcement:%a %Y-%m-%d}",
         "featured": selection.featured,
         "overflow": selection.overflow,
         "triaged_count": triaged_count,
         "model": model,
+        "run_time": format_duration(duration_seconds),
+        "failure_count": failure_count,
     }
     subject = (
         f"arxiv-tldr · {announcement:%a %Y-%m-%d} · {len(selection.featured)} featured / "

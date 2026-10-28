@@ -37,16 +37,19 @@ def summarize_step(
 
 def send_step(
     announcement: date, *, config: Config, mailer: Mailer, clock: Callable[[], datetime],
-    store: Store,
+    store: Store, started: datetime | None = None,
 ) -> bool:
     """Send the Digest unless one was already sent; marked sent only once the mailer accepts."""
     if store.digest_sent(announcement):
         return False
+    started = started or clock()
     triaged = store.triaged(announcement)
     selection = select(triaged, threshold=config.threshold, cap=config.cap)
     message = render_digest(
         announcement, selection, triaged_count=len(triaged), model=config.ollama_model,
         recipients=list(config.recipients),
+        duration_seconds=(clock() - started).total_seconds(),
+        failure_count=len(store.candidates(announcement)) - len(triaged),
     )
     mailer.send(message)  # raises if not accepted; the Digest is then left unsent
     store.mark_digest_sent(
@@ -66,10 +69,13 @@ def run(
     store: Store | None = None,
 ) -> None:
     """Process an Announcement end to end. Safe to rerun: finished work is skipped."""
+    started = clock()
     store = store or Store(config.db_path)
     if store.digest_sent(announcement):
         return
     fetch(announcement, config=config, client=client, store=store, clock=clock)
     triage_step(announcement, config=config, client=client, store=store)
     summarize_step(announcement, config=config, client=client, store=store)
-    send_step(announcement, config=config, mailer=mailer, clock=clock, store=store)
+    send_step(
+        announcement, config=config, mailer=mailer, clock=clock, store=store, started=started
+    )
