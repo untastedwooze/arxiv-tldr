@@ -126,3 +126,19 @@ def test_placeholder_interest_profile_ships_with_sections():
     assert Config().interest_profile_path.name == "interest-profile.md"
     for heading in ("Core interests", "Adjacent interests", "Exclusions"):
         assert heading in text
+
+
+def test_cli_run_defaults_to_todays_eastern_announcement_date(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+
+    config, client, mailer, _ = setup(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.toml").write_text(
+        'watched_categories = ["q-fin", "stat.ME"]\ndb_path = "t.db"\n'
+        f'interest_profile_path = "profile.md"\nollama_base_url = "{OLLAMA_URL}"\n'
+        'recipients = ["reader@example.com"]\n'
+    )
+    # 01:30 UTC on Oct 27 is 21:30 Monday evening in New York: Monday's Announcement.
+    late = lambda: datetime(2026, 10, 27, 1, 30, tzinfo=timezone.utc)
+    assert main(["run"], client=client, clock=late, mailer=mailer) == 0
+    assert "Mon 2026-10-26" in mailer.sent[0].subject

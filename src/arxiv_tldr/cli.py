@@ -11,7 +11,7 @@ import httpx
 from .config import load_config
 from .feed import fetch
 from .mailer import GmailMailer, Mailer
-from .pipeline import run, send_step, summarize_step, triage_step
+from .pipeline import EASTERN, run, send_step, summarize_step, triage_step
 from .store import Store
 
 
@@ -29,7 +29,10 @@ def main(
     fetch_parser = sub.add_parser("fetch", help="Fetch an Announcement's Candidates into the Store")
     fetch_parser.add_argument("announcement", type=date.fromisoformat, help="Announcement date")
     run_parser = sub.add_parser("run", help="Fetch, triage, select and send an Announcement's Digest")
-    run_parser.add_argument("announcement", type=date.fromisoformat, help="Announcement date")
+    run_parser.add_argument(
+        "announcement", type=date.fromisoformat, nargs="?",
+        help="Announcement date (default: today in America/New_York)",
+    )
     for name, text in (
         ("triage", "Triage an Announcement's untriaged Candidates"),
         ("summarize", "Summarize an Announcement's Featured Papers"),
@@ -45,8 +48,9 @@ def main(
     with nullcontext(client) if client else httpx.Client(timeout=30, follow_redirects=True) as http:
         if args.command == "run":
             mailer = mailer or GmailMailer(config.gmail_address, config.gmail_app_password)
+            announcement = args.announcement or clock().astimezone(EASTERN).date()
             run(
-                args.announcement, config=config, client=http, mailer=mailer, clock=clock,
+                announcement, config=config, client=http, mailer=mailer, clock=clock,
                 sleep=sleep or time.sleep,
             )
             return 0
