@@ -46,7 +46,11 @@ class OllamaClient:
             except httpx.TransportError as exc:
                 raise OllamaUnreachable(f"Ollama unreachable at {self._url}: {exc}") from exc
             except httpx.HTTPStatusError as exc:
-                raise OllamaUnreachable(f"Ollama error at {self._url}: {exc}") from exc
+                if exc.response.status_code >= 500 or exc.response.status_code == 404:
+                    # The server (or its model) is the problem: abort the attempt, retry later.
+                    raise OllamaUnreachable(f"Ollama error at {self._url}: {exc}") from exc
+                # Another 4xx rejects this one prompt; retrying the same request cannot help.
+                raise BadLLMOutput(f"Ollama rejected the request: {exc}") from exc
             seconds = time.perf_counter() - started
             try:
                 return shape.model_validate_json(response.json()["response"]), seconds

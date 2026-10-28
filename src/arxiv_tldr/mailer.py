@@ -35,6 +35,6 @@ class GmailMailer:
         mail["To"] = ", ".join(message.recipients)
         mail.set_content(message.text)
         mail.add_alternative(message.html, subtype="html")
-        with smtplib.SMTP_SSL(self._host, self._port, context=ssl.create_default_context()) as smtp:
+        with smtplib.SMTP_SSL(self._host, self._port, context=ssl.create_default_context(), timeout=60) as smtp:
             smtp.login(self._address, self._password)
             smtp.send_message(mail)

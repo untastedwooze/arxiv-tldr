@@ -33,7 +33,7 @@ class _BodyExtractor(HTMLParser):
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self._stack: list[bool] = []  # per open element: does it start a skipped region?
+        self._stack: list[tuple[str, bool]] = []  # open elements: (tag, starts a skipped region)
         self._skipping = 0
         self.parts: list[str] = []
 
@@ -44,15 +44,20 @@ class _BodyExtractor(HTMLParser):
             return
         classes = set((dict(attrs).get("class") or "").split())
         skip = tag in _SKIP_TAGS or bool(classes & _SKIP_CLASSES)
-        self._stack.append(skip)
+        self._stack.append((tag, skip))
         self._skipping += skip
         if tag in _BLOCK_TAGS and not self._skipping:
             self.parts.append("\n")
 
     def handle_endtag(self, tag):
-        if tag in _VOID_TAGS or not self._stack:
+        if tag in _VOID_TAGS or not any(open_tag == tag for open_tag, _ in self._stack):
             return
-        self._skipping -= self._stack.pop()
+        # Close the matching element and any unclosed ones inside it (e.g. a bare <li>).
+        while True:
+            open_tag, skip = self._stack.pop()
+            self._skipping -= skip
+            if open_tag == tag:
+                break
         if tag in _BLOCK_TAGS and not self._skipping:
             self.parts.append("\n")
 
@@ -126,6 +131,8 @@ SOURCES = [_from_html, _from_pdf]
 def obtain(candidate: Candidate, client: httpx.Client, budget: int | None = None) -> FullText:
     """The best available text for a Candidate, cut to ``budget`` characters if given;
     the abstract if no full text can be had."""
+    if budget is not None and budget <= 0:
+        return FullText(text=candidate.abstract, source="abstract")
     for source in SOURCES:
         found = source(candidate, client)
         if found is not None:
