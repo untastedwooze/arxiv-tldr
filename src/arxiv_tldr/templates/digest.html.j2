@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <body style="font-family: sans-serif; max-width: 42em; margin: auto;">
-<h1>arxiv-tldr &middot; {{ announcement.isoformat() }}</h1>
+<h1>arxiv-tldr &middot; {{ announcement_label }}</h1>
 <p>{{ featured|length }} featured, {{ overflow|length }} overflow, {{ triaged_count }} triaged.</p>
 {% for t in featured %}
 {% set c = t.candidate %}
@@ -22,6 +22,6 @@
 </ul>
 {% endif %}
 <hr>
-<p><small>Model: {{ model }}</small></p>
+<p><small>Run time: {{ run_time }} &middot; Failures: {{ failure_count }} &middot; Model: {{ model }}</small></p>
 </body>
 </html>

@@ -1,4 +1,4 @@
-arxiv-tldr - {{ announcement.isoformat() }}
+arxiv-tldr - {{ announcement_label }}
 {{ featured|length }} featured, {{ overflow|length }} overflow, {{ triaged_count }} triaged.
 {% for t in featured %}
 {% set c = t.candidate %}
@@ -18,4 +18,4 @@ Overflow
 {% endfor %}
 {% endif %}
 
-Model: {{ model }}
+Run time: {{ run_time }} | Failures: {{ failure_count }} | Model: {{ model }}
