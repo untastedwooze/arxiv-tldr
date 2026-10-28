@@ -38,6 +38,13 @@ class Candidate(BaseModel):
     pdf_url: str
 
 
+class TriagedCandidate(BaseModel):
+    candidate: Candidate
+    score: int
+    rationale: str
+    model: str
+
+
 class Store:
     def __init__(self, path: Path):
         self._db = sqlite3.connect(path)
