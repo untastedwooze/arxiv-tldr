@@ -25,6 +25,7 @@ def run(
     store: Store | None = None,
 ) -> None:
     """Process an Announcement end to end. Safe to rerun: finished work is skipped."""
+    started = clock()
     store = store or Store(config.db_path)
     if store.digest_sent(announcement):
         return
@@ -37,6 +38,8 @@ def run(
     message = render_digest(
         announcement, selection, triaged_count=len(triaged), model=config.ollama_model,
         recipients=list(config.recipients),
+        duration_seconds=(clock() - started).total_seconds(),
+        failure_count=len(store.candidates(announcement)) - len(triaged),
     )
     mailer.send(message)  # raises if not accepted; the Digest is then left unsent
     store.mark_digest_sent(
