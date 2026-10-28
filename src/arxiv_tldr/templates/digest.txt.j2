@@ -13,6 +13,9 @@ Why you're seeing this: {{ t.rationale }}
 {% if summary.abstract_only %}
 [Abstract-only summary: full text unavailable]
 {% endif %}
+{% if summary.cut %}
+[Text cut: paper was too long; summarized from the first part only]
+{% endif %}
 {% for key, label in summary_labels.items() %}
 {{ label }}: {{ summary.fields[key] }}
 {% endfor %}

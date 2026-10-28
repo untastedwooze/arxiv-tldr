@@ -53,6 +53,7 @@ def build_prompt(profile: str, candidate: Candidate, full_text: FullText) -> str
 def summarize(
     announcement: date, featured: list[TriagedCandidate], *, profile: str, llm: OllamaClient,
     store: Store, client: httpx.Client, num_ctx: int,
+    text_budget: int | None = None,
 ) -> int:
     """Summarize the Featured Papers with no stored Summary; returns how many were written.
 
@@ -64,7 +65,7 @@ def summarize(
         candidate = triaged.candidate
         if candidate.arxiv_id in done:
             continue
-        full_text = obtain(candidate, client)
+        full_text = obtain(candidate, client, budget=text_budget)
         try:
             summary, seconds = llm.generate(
                 build_prompt(profile, candidate, full_text), Summary, num_ctx=num_ctx

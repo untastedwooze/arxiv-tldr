@@ -85,6 +85,30 @@ def html_handler(pages: dict[str, str]):
     return handler
 
 
+def make_pdf(*pages: str) -> bytes:
+    """A tiny PDF with one page per string (each string may contain newlines)."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    for text in pages:
+        doc.new_page().insert_text((72, 72), text)
+    return doc.tobytes()
+
+
+def pdf_handler(pdfs: dict[str, bytes]):
+    """Serve PDFs at arxiv.org/pdf/<id>; other ids are 404."""
+
+    def handler(request: httpx.Request) -> httpx.Response | None:
+        if request.url.host != "arxiv.org" or not request.url.path.startswith("/pdf/"):
+            return None
+        name = request.url.path[len("/pdf/"):]
+        if name in pdfs:
+            return httpx.Response(200, content=pdfs[name])
+        return httpx.Response(404)
+
+    return handler
+
+
 def combined_transport(*handlers) -> httpx.MockTransport:
     def handler(request: httpx.Request) -> httpx.Response:
         for h in handlers:

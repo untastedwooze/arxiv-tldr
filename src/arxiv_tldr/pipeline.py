@@ -39,6 +39,7 @@ def summarize_step(
     return summarize(
         announcement, selection.featured, profile=profile, llm=llm, store=store, client=client,
         num_ctx=config.num_ctx,
+        text_budget=config.text_budget_chars,
     )
 
 

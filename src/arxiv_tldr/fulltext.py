@@ -1,13 +1,15 @@
 """Full text: obtain the text a Summary is written from, with its provenance.
 
-``obtain`` tries each source in order and falls back to the abstract. Ticket #5 adds a PDF
-source (and cutting to fit the context window) by extending ``SOURCES`` and setting ``cut``.
+``obtain`` tries each source in order (HTML, then PDF), cuts the text to the budget, and falls
+back to the abstract.
 """
 
+import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 
 import httpx
+import pymupdf
 
 from .store import Candidate
 
@@ -78,13 +80,56 @@ def _from_html(candidate: Candidate, client: httpx.Client) -> FullText | None:
     return FullText(text=text, source="html") if text else None
 
 
-SOURCES = [_from_html]
+_BACK_MATTER = re.compile(
+    r"^(?:(?:\d+|[IVX]+)\.?\s+)?(?:references|bibliography|appendix|appendices)\b", re.IGNORECASE
+)
 
 
-def obtain(candidate: Candidate, client: httpx.Client) -> FullText:
-    """The best available text for a Candidate; the abstract if no full text can be had."""
+def strip_back_matter(text: str) -> str:
+    """Drop everything from the first References / Bibliography / Appendix heading line
+    (ignoring any in the first fifth of the text, e.g. a table of contents)."""
+    lines = text.splitlines()
+    start = len(text) // 5
+    offset = 0
+    for index, line in enumerate(lines):
+        if offset >= start and _BACK_MATTER.match(line.strip()):
+            return "\n".join(lines[:index]).strip()
+        offset += len(line) + 1
+    return text
+
+
+def extract_pdf_text(data: bytes) -> str:
+    """Body text of a PDF without references and appendices; empty if it cannot be read."""
+    try:
+        with pymupdf.open(stream=data, filetype="pdf") as doc:
+            raw = "\n".join(page.get_text() for page in doc)
+    except Exception:  # pymupdf raises its own error types for corrupt input
+        return ""
+    lines = (" ".join(line.split()) for line in raw.splitlines())
+    return strip_back_matter("\n".join(line for line in lines if line))
+
+
+def _from_pdf(candidate: Candidate, client: httpx.Client) -> FullText | None:
+    try:
+        response = client.get(candidate.pdf_url, follow_redirects=True)
+    except httpx.TransportError:
+        return None
+    if response.status_code != 200:
+        return None
+    text = extract_pdf_text(response.content)
+    return FullText(text=text, source="pdf") if text else None
+
+
+SOURCES = [_from_html, _from_pdf]
+
+
+def obtain(candidate: Candidate, client: httpx.Client, budget: int | None = None) -> FullText:
+    """The best available text for a Candidate, cut to ``budget`` characters if given;
+    the abstract if no full text can be had."""
     for source in SOURCES:
         found = source(candidate, client)
         if found is not None:
+            if budget is not None and len(found.text) > budget:
+                return FullText(text=found.text[:budget].rstrip(), source=found.source, cut=True)
             return found
     return FullText(text=candidate.abstract, source="abstract")

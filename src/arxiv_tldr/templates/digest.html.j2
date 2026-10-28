@@ -15,6 +15,9 @@
 {% if summary.abstract_only %}
 <p><strong>Abstract-only summary</strong> <small>(full text unavailable)</small></p>
 {% endif %}
+{% if summary.cut %}
+<p><strong>Text cut</strong> <small>(paper was too long; summarized from the first part only)</small></p>
+{% endif %}
 {% for key, label in summary_labels.items() %}
 <p><strong>{{ label }}:</strong> {{ summary.fields[key] }}</p>
 {% endfor %}
