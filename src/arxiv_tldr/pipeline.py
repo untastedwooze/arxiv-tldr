@@ -1,4 +1,8 @@
-"""Pipeline: fetch -> triage -> select -> send for one Announcement date."""
+"""Pipeline: fetch -> triage -> summarize -> send for one Announcement date.
+
+Each step is a function that does only the work with no stored result, so any step can be
+rerun safely and ``run`` is just the steps in order.
+"""
 
 from collections.abc import Callable
 from datetime import date, datetime
@@ -16,6 +20,54 @@ from .summarize import summarize
 from .triage import triage
 
 
+def triage_step(
+    announcement: date, *, config: Config, client: httpx.Client, store: Store
+) -> int:
+    """Score the Candidates that have no stored result; returns how many were scored."""
+    llm = OllamaClient(client, config.ollama_base_url, config.ollama_model)
+    profile = config.interest_profile_path.read_text()
+    return triage(announcement, profile=profile, llm=llm, store=store)
+
+
+def summarize_step(
+    announcement: date, *, config: Config, client: httpx.Client, store: Store
+) -> int:
+    """Summarize the Featured Papers that have no stored Summary; returns how many were written."""
+    llm = OllamaClient(client, config.ollama_base_url, config.ollama_model)
+    profile = config.interest_profile_path.read_text()
+    selection = select(store.triaged(announcement), threshold=config.threshold, cap=config.cap)
+    return summarize(
+        announcement, selection.featured, profile=profile, llm=llm, store=store, client=client,
+        num_ctx=config.num_ctx,
+    )
+
+
+def send_step(
+    announcement: date, *, config: Config, mailer: Mailer, clock: Callable[[], datetime],
+    store: Store, started: datetime | None = None,
+) -> bool:
+    """Send the Digest unless one was already sent; marked sent only once the mailer accepts."""
+    if store.digest_sent(announcement):
+        return False
+    started = started or clock()
+    triaged = store.triaged(announcement)
+    selection = select(triaged, threshold=config.threshold, cap=config.cap)
+    summaries = store.summaries(announcement)
+    summary_failures = sum(1 for t in selection.featured if t.candidate.arxiv_id not in summaries)
+    message = render_digest(
+        announcement, selection, summaries=summaries, triaged_count=len(triaged),
+        model=config.ollama_model, recipients=list(config.recipients),
+        duration_seconds=(clock() - started).total_seconds(),
+        failure_count=len(store.candidates(announcement)) - len(triaged) + summary_failures,
+    )
+    mailer.send(message)  # raises if not accepted; the Digest is then left unsent
+    store.mark_digest_sent(
+        announcement, featured=len(selection.featured), overflow=len(selection.overflow),
+        sent_at=clock(),
+    )
+    return True
+
+
 def run(
     announcement: date,
     *,
@@ -31,25 +83,8 @@ def run(
     if store.digest_sent(announcement):
         return
     fetch(announcement, config=config, client=client, store=store, clock=clock)
-    llm = OllamaClient(client, config.ollama_base_url, config.ollama_model)
-    profile = config.interest_profile_path.read_text()
-    triage(announcement, profile=profile, llm=llm, store=store)
-    triaged = store.triaged(announcement)
-    selection = select(triaged, threshold=config.threshold, cap=config.cap)
-    summarize(
-        announcement, selection.featured, profile=profile, llm=llm, store=store, client=client,
-        num_ctx=config.num_ctx,
-    )
-    summaries = store.summaries(announcement)
-    summary_failures = sum(1 for t in selection.featured if t.candidate.arxiv_id not in summaries)
-    message = render_digest(
-        announcement, selection, summaries=summaries, triaged_count=len(triaged),
-        model=config.ollama_model, recipients=list(config.recipients),
-        duration_seconds=(clock() - started).total_seconds(),
-        failure_count=len(store.candidates(announcement)) - len(triaged) + summary_failures,
-    )
-    mailer.send(message)  # raises if not accepted; the Digest is then left unsent
-    store.mark_digest_sent(
-        announcement, featured=len(selection.featured), overflow=len(selection.overflow),
-        sent_at=clock(),
+    triage_step(announcement, config=config, client=client, store=store)
+    summarize_step(announcement, config=config, client=client, store=store)
+    send_step(
+        announcement, config=config, mailer=mailer, clock=clock, store=store, started=started
     )
