@@ -8,7 +8,20 @@ arxiv-tldr - {{ announcement_label }}
 abs: {{ c.abs_url }}  HTML: {{ c.html_url }}  PDF: {{ c.pdf_url }}
 Why you're seeing this: {{ t.rationale }}
 
+{% set summary = summaries.get(c.arxiv_id) %}
+{% if summary %}
+{% if summary.abstract_only %}
+[Abstract-only summary: full text unavailable]
+{% endif %}
+{% if summary.cut %}
+[Text cut: paper was too long; summarized from the first part only]
+{% endif %}
+{% for key, label in summary_labels.items() %}
+{{ label }}: {{ summary.fields[key] }}
+{% endfor %}
+{% else %}
 {{ c.abstract }}
+{% endif %}
 {% endfor %}
 {% if overflow %}
 

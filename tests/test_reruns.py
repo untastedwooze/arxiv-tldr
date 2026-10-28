@@ -36,10 +36,11 @@ def test_subcommands_run_step_by_step(tmp_path, clock, monkeypatch):
     assert cli("triage", D_ARG) == 0
     assert len(requests) == 4 and mailer.sent == []
     assert cli("summarize", D_ARG) == 0
-    assert mailer.sent == []
+    assert len(requests) == 4 + 3 and mailer.sent == []  # one Summary per Featured Paper
+
     assert cli("send", D_ARG) == 0
     assert len(mailer.sent) == 1
-    assert len(requests) == 4
+    assert len(requests) == 4 + 3
 
 
 def test_crash_partway_through_triage_resumes_without_redoing_work(tmp_path, clock):
@@ -63,7 +64,7 @@ def test_crash_partway_through_triage_resumes_without_redoing_work(tmp_path, clo
 
     run(D, config=config, client=client, mailer=mailer, clock=clock, sleep=sleep)
     assert sleeps == [1200]
-    assert len(calls) == 3 + 2  # the crashed one and the remaining one only
+    assert len(calls) == 3 + 2 + 3  # crashed + remaining triage, then 3 Summaries
     assert len(mailer.sent) == 1
     run(D, config=config, client=client, mailer=mailer, clock=clock)
     assert len(mailer.sent) == 1

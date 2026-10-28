@@ -10,7 +10,20 @@
 <p>{{ authors_line(c.authors) }} &middot; {{ ([c.primary_category] + c.cross_list_categories)|join(", ") }} &middot; {{ c.arxiv_id }}</p>
 <p><a href="{{ c.abs_url }}">abs</a> | <a href="{{ c.html_url }}">HTML</a> | <a href="{{ c.pdf_url }}">PDF</a></p>
 <p><em>Why you're seeing this:</em> {{ t.rationale }}</p>
+{% set summary = summaries.get(c.arxiv_id) %}
+{% if summary %}
+{% if summary.abstract_only %}
+<p><strong>Abstract-only summary</strong> <small>(full text unavailable)</small></p>
+{% endif %}
+{% if summary.cut %}
+<p><strong>Text cut</strong> <small>(paper was too long; summarized from the first part only)</small></p>
+{% endif %}
+{% for key, label in summary_labels.items() %}
+<p><strong>{{ label }}:</strong> {{ summary.fields[key] }}</p>
+{% endfor %}
+{% else %}
 <p>{{ c.abstract }}</p>
+{% endif %}
 </div>
 {% endfor %}
 {% if overflow %}

@@ -30,8 +30,25 @@ def rss_transport(feeds: dict[str, str], requests: list | None = None) -> httpx.
     return httpx.MockTransport(lambda r: handler(r) or httpx.Response(404))
 
 
-def ollama_handler(scores: dict[str, tuple[int, str]], requests: list | None = None):
-    """Canned Ollama: reply to a Triage prompt by the title it mentions."""
+SUMMARY_FIELDS = {
+    "tldr": "Rough paths forecast volatility.",
+    "problem": "Forecasting volatility.",
+    "method": "Signature features.",
+    "data": "Daily index returns.",
+    "key_results": "12% lower error.",
+    "limitations": "Single market.",
+    "why_it_matters": "Directly on your volatility interests.",
+}
+
+
+def ollama_handler(
+    scores: dict[str, tuple[int, str]],
+    requests: list | None = None,
+    summaries: dict[str, dict] | None = None,
+):
+    """Canned Ollama. Triage prompts are answered by the title they mention; Summary
+    requests (recognised by the ``tldr`` field in the schema) by ``summaries[title]``,
+    defaulting to SUMMARY_FIELDS."""
 
     def handler(request: httpx.Request) -> httpx.Response | None:
         if request.url.host != "piglet.example" or request.url.path != "/api/generate":
@@ -39,11 +56,55 @@ def ollama_handler(scores: dict[str, tuple[int, str]], requests: list | None = N
         body = json.loads(request.content)
         if requests is not None:
             requests.append(body)
+        if "tldr" in body["format"]["properties"]:
+            answer = SUMMARY_FIELDS
+            for title, fields in (summaries or {}).items():
+                if title in body["prompt"]:
+                    answer = fields
+            return httpx.Response(200, json={"response": json.dumps(answer), "done": True})
         for title, (score, rationale) in scores.items():
             if title in body["prompt"]:
                 answer = {"rationale": rationale, "score": score}
                 return httpx.Response(200, json={"response": json.dumps(answer), "done": True})
         return httpx.Response(500)
+
+    return handler
+
+
+def html_handler(pages: dict[str, str]):
+    """Serve saved arXiv HTML fixtures at arxiv.org/html/<id>; other ids are 404."""
+
+    def handler(request: httpx.Request) -> httpx.Response | None:
+        if request.url.host != "arxiv.org" or not request.url.path.startswith("/html/"):
+            return None
+        name = request.url.path[len("/html/"):]
+        if name in pages:
+            return httpx.Response(200, text=(FIXTURES / pages[name]).read_text())
+        return httpx.Response(404)
+
+    return handler
+
+
+def make_pdf(*pages: str) -> bytes:
+    """A tiny PDF with one page per string (each string may contain newlines)."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    for text in pages:
+        doc.new_page().insert_text((72, 72), text)
+    return doc.tobytes()
+
+
+def pdf_handler(pdfs: dict[str, bytes]):
+    """Serve PDFs at arxiv.org/pdf/<id>; other ids are 404."""
+
+    def handler(request: httpx.Request) -> httpx.Response | None:
+        if request.url.host != "arxiv.org" or not request.url.path.startswith("/pdf/"):
+            return None
+        name = request.url.path[len("/pdf/"):]
+        if name in pdfs:
+            return httpx.Response(200, content=pdfs[name])
+        return httpx.Response(404)
 
     return handler
 

@@ -61,7 +61,7 @@ def test_run_sends_digest_of_featured_papers_by_score(tmp_path, clock):
     assert "bootstrap" not in html
     assert "Why you&#39;re seeing this:" in html or "Why you're seeing this:" in html
     assert "Directly about volatility modelling." in html
-    assert "We forecast volatility using rough path signatures." in html
+    assert "Rough paths forecast volatility." in html  # Summary replaces the abstract
     assert "Alice Smith, Bob Jones, Carol Lee et al." in html
     assert "q-fin.ST" in html and "2610.00001" in html
     assert 'href="https://arxiv.org/abs/2610.00001"' in html
@@ -91,6 +91,7 @@ def test_threshold_is_configurable(tmp_path, clock):
 def test_triage_prompt_starts_with_interest_profile_and_asks_json_schema(tmp_path, clock):
     config, client, mailer, requests = setup(tmp_path)
     run(D, config=config, client=client, mailer=mailer, clock=clock)
+    requests = [r for r in requests if "score" in r["format"]["properties"]]
     assert len(requests) == 4
     for body in requests:
         assert body["prompt"].startswith("I care about volatility and tail risk.")
@@ -104,7 +105,7 @@ def test_rerun_does_not_retriage_or_resend(tmp_path, clock):
     config, client, mailer, requests = setup(tmp_path)
     run(D, config=config, client=client, mailer=mailer, clock=clock)
     run(D, config=config, client=client, mailer=mailer, clock=clock)
-    assert len(requests) == 4
+    assert len([r for r in requests if "score" in r["format"]["properties"]]) == 4
     assert len(mailer.sent) == 1
 
 

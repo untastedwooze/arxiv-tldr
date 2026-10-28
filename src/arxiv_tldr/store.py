@@ -31,6 +31,16 @@ CREATE TABLE IF NOT EXISTS triage_results (
     seconds REAL NOT NULL,
     PRIMARY KEY (announcement_date, arxiv_id)
 );
+CREATE TABLE IF NOT EXISTS summaries (
+    announcement_date TEXT NOT NULL,
+    arxiv_id TEXT NOT NULL,
+    fields TEXT NOT NULL,               -- JSON object of the Summary fields
+    source TEXT NOT NULL,               -- 'html', 'pdf' or 'abstract'
+    cut INTEGER NOT NULL,               -- 1 if the source text was cut to fit the context
+    model TEXT NOT NULL,
+    seconds REAL NOT NULL,
+    PRIMARY KEY (announcement_date, arxiv_id)
+);
 CREATE TABLE IF NOT EXISTS call_timings (
     announcement_date TEXT NOT NULL,
     kind TEXT NOT NULL,                  -- "triage" or "summary"
@@ -70,6 +80,19 @@ class TriagedCandidate(BaseModel):
     score: int
     rationale: str
     model: str
+
+
+class StoredSummary(BaseModel):
+    """A Summary as stored: its fields plus where the text came from."""
+
+    fields: dict[str, str]
+    source: str  # "html", "pdf" or "abstract"
+    cut: bool
+    model: str
+
+    @property
+    def abstract_only(self) -> bool:
+        return self.source == "abstract"
 
 
 class CallTiming(BaseModel):
@@ -173,6 +196,31 @@ class Store:
             )
             for r in rows
         ]
+
+    def add_summary(
+        self, announcement: date, arxiv_id: str, *, fields: dict[str, str], source: str,
+        cut: bool, model: str, seconds: float,
+    ) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT OR IGNORE INTO summaries VALUES (?,?,?,?,?,?,?)",
+                (announcement.isoformat(), arxiv_id, json.dumps(fields), source, int(cut),
+                 model, seconds),
+            )
+        self.add_call_timing(announcement, "summary", arxiv_id, seconds)
+
+    def summaries(self, announcement: date) -> dict[str, StoredSummary]:
+        """Stored Summaries for an Announcement, keyed by arXiv ID."""
+        rows = self._db.execute(
+            "SELECT * FROM summaries WHERE announcement_date = ?", (announcement.isoformat(),)
+        )
+        return {
+            r["arxiv_id"]: StoredSummary(
+                fields=json.loads(r["fields"]), source=r["source"], cut=bool(r["cut"]),
+                model=r["model"],
+            )
+            for r in rows
+        }
 
     def digest_sent(self, announcement: date) -> bool:
         row = self._db.execute(

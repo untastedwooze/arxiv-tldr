@@ -6,6 +6,8 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 
 from .mailer import Message
 from .selection import Selection
+from .store import StoredSummary
+from .summarize import SUMMARY_LABELS
 
 
 def authors_line(authors: list[str]) -> str:
@@ -27,10 +29,12 @@ _env = Environment(
     lstrip_blocks=True,
 )
 _env.globals["authors_line"] = authors_line
+_env.globals["summary_labels"] = SUMMARY_LABELS
 
 
 def render_digest(
-    announcement: date, selection: Selection, *, triaged_count: int, model: str,
+    announcement: date, selection: Selection, *, summaries: dict[str, StoredSummary],
+    triaged_count: int, model: str,
     recipients: list[str], duration_seconds: float = 0, failure_count: int = 0,
 ) -> Message:
     context = {
@@ -38,6 +42,7 @@ def render_digest(
         "announcement_label": f"{announcement:%a %Y-%m-%d}",
         "featured": selection.featured,
         "overflow": selection.overflow,
+        "summaries": summaries,
         "triaged_count": triaged_count,
         "model": model,
         "run_time": format_duration(duration_seconds),

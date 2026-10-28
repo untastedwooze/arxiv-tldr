@@ -47,5 +47,5 @@ def test_untriageable_candidate_counts_as_failure_and_timings_are_stored(tmp_pat
     assert "3 triaged" in msg.subject
     assert "Failures: 1" in msg.text and "Failures: 1" in msg.html
     timings = Store(config.db_path).call_timings(D)
-    assert [t.kind for t in timings] == ["triage"] * 3
+    assert [t.kind for t in timings] == ["triage"] * 3 + ["summary"] * 3
     assert all(t.seconds >= 0 for t in timings)

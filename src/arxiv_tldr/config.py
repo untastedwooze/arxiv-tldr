@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict
 
 DEFAULT_WATCHED_CATEGORIES = ("q-fin", "stat.ME", "stat.AP", "stat.CO", "stat.ML")
+CONTEXT_RESERVE_TOKENS = 4096  # profile, instructions and the generated Summary
+CHARS_PER_TOKEN = 3
 ENV_PREFIX = "ARXIV_TLDR_"
 
 
@@ -28,9 +30,20 @@ class Config(BaseModel):
     cap: int = 15
     cutoff: str = "04:00"  # US Eastern, the morning after the Announcement
     retry_interval_minutes: int = 20
+    num_ctx: int = 32768  # context window requested for every Summary call
+    # Max characters of paper text in a Summary prompt; None derives it from num_ctx.
+    summary_text_budget: int | None = None
     recipients: tuple[str, ...] = ()
     gmail_address: str = ""
     gmail_app_password: str = ""
+
+    @property
+    def text_budget_chars(self) -> int:
+        """Characters of paper text that fit: num_ctx less room for the prompt and the answer,
+        at roughly 3 characters per token."""
+        if self.summary_text_budget is not None:
+            return self.summary_text_budget
+        return max(0, self.num_ctx - CONTEXT_RESERVE_TOKENS) * CHARS_PER_TOKEN
 
 
 def load_config(config_file: Path = Path("config.toml"), env_file: Path = Path(".env")) -> Config:

@@ -20,6 +20,7 @@ from .mailer import Mailer
 from .notice import render_failure_notice
 from .selection import select
 from .store import Store
+from .summarize import summarize
 from .triage import triage
 
 log = logging.getLogger(__name__)
@@ -47,8 +48,15 @@ def triage_step(
 def summarize_step(
     announcement: date, *, config: Config, client: httpx.Client, store: Store
 ) -> int:
-    """Summarize the Featured Papers that have no stored Summary (none yet: see ticket #4)."""
-    return 0
+    """Summarize the Featured Papers that have no stored Summary; returns how many were written."""
+    llm = OllamaClient(client, config.ollama_base_url, config.ollama_model)
+    profile = config.interest_profile_path.read_text()
+    selection = select(store.triaged(announcement), threshold=config.threshold, cap=config.cap)
+    return summarize(
+        announcement, selection.featured, profile=profile, llm=llm, store=store, client=client,
+        num_ctx=config.num_ctx,
+        text_budget=config.text_budget_chars,
+    )
 
 
 def send_step(
@@ -61,11 +69,13 @@ def send_step(
     started = started or clock()
     triaged = store.triaged(announcement)
     selection = select(triaged, threshold=config.threshold, cap=config.cap)
+    summaries = store.summaries(announcement)
+    summary_failures = sum(1 for t in selection.featured if t.candidate.arxiv_id not in summaries)
     message = render_digest(
-        announcement, selection, triaged_count=len(triaged), model=config.ollama_model,
-        recipients=list(config.recipients),
+        announcement, selection, summaries=summaries, triaged_count=len(triaged),
+        model=config.ollama_model, recipients=list(config.recipients),
         duration_seconds=(clock() - started).total_seconds(),
-        failure_count=len(store.candidates(announcement)) - len(triaged),
+        failure_count=len(store.candidates(announcement)) - len(triaged) + summary_failures,
     )
     try:
         mailer.send(message)
