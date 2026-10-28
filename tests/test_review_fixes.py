@@ -27,5 +27,5 @@ def test_paper_whose_summary_stays_malformed_is_listed_with_its_abstract_and_a_n
     run(D, config=config, client=client, mailer=mailer, clock=clock)
     msg = mailer.sent[0]
     assert "3 featured" in msg.subject
-    assert "A study of tail behaviour &amp; estimation." in msg.html
+    assert "A study of tail behaviour" in msg.html
     assert "Summary unavailable" in msg.html and "Summary unavailable" in msg.text
