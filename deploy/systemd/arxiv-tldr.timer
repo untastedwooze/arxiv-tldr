@@ -1,0 +1,10 @@
+[Unit]
+Description=Run arxiv-tldr after the arXiv Announcement (Sun-Thu 21:30 ET)
+
+[Timer]
+OnCalendar=Sun,Mon,Tue,Wed,Thu 21:30 America/New_York
+Persistent=true
+Unit=arxiv-tldr.service
+
+[Install]
+WantedBy=timers.target

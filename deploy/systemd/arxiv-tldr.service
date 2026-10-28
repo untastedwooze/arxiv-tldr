@@ -1,0 +1,13 @@
+[Unit]
+Description=arxiv-tldr nightly Digest
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# The run sleep-loops until the 04:00 ET cutoff, so it can last hours: no timeout.
+Type=simple
+# %h is the home directory. Edit WorkingDirectory to your checkout (holds config.toml and .env).
+WorkingDirectory=%h/honey-tree/arxiv-tldr
+EnvironmentFile=-%h/honey-tree/arxiv-tldr/.env
+ExecStart=%h/.local/bin/uv run --no-dev arxiv-tldr run
+TimeoutStartSec=infinity
