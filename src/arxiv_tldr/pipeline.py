@@ -12,6 +12,7 @@ from .llm import OllamaClient
 from .mailer import Mailer
 from .selection import select
 from .store import Store
+from .summarize import summarize
 from .triage import triage
 
 
@@ -35,11 +36,17 @@ def run(
     triage(announcement, profile=profile, llm=llm, store=store)
     triaged = store.triaged(announcement)
     selection = select(triaged, threshold=config.threshold, cap=config.cap)
+    summarize(
+        announcement, selection.featured, profile=profile, llm=llm, store=store, client=client,
+        num_ctx=config.num_ctx,
+    )
+    summaries = store.summaries(announcement)
+    summary_failures = sum(1 for t in selection.featured if t.candidate.arxiv_id not in summaries)
     message = render_digest(
-        announcement, selection, triaged_count=len(triaged), model=config.ollama_model,
-        recipients=list(config.recipients),
+        announcement, selection, summaries=summaries, triaged_count=len(triaged),
+        model=config.ollama_model, recipients=list(config.recipients),
         duration_seconds=(clock() - started).total_seconds(),
-        failure_count=len(store.candidates(announcement)) - len(triaged),
+        failure_count=len(store.candidates(announcement)) - len(triaged) + summary_failures,
     )
     mailer.send(message)  # raises if not accepted; the Digest is then left unsent
     store.mark_digest_sent(

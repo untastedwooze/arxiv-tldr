@@ -202,6 +202,7 @@ class Store:
                 (announcement.isoformat(), arxiv_id, json.dumps(fields), source, int(cut),
                  model, seconds),
             )
+        self.add_call_timing(announcement, "summary", arxiv_id, seconds)
 
     def summaries(self, announcement: date) -> dict[str, StoredSummary]:
         """Stored Summaries for an Announcement, keyed by arXiv ID."""
