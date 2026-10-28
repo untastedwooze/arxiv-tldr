@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<body style="font-family: sans-serif; max-width: 42em; margin: auto;">
+<h1>arxiv-tldr &middot; {{ announcement.isoformat() }}</h1>
+<p>{{ featured|length }} featured, {{ overflow|length }} overflow, {{ triaged_count }} triaged.</p>
+{% for t in featured %}
+{% set c = t.candidate %}
+<div style="margin-bottom: 1.5em;">
+<h2>{{ c.title }} <small>[{{ t.score }}/10]</small></h2>
+<p>{{ authors_line(c.authors) }} &middot; {{ ([c.primary_category] + c.cross_list_categories)|join(", ") }} &middot; {{ c.arxiv_id }}</p>
+<p><a href="{{ c.abs_url }}">abs</a> | <a href="{{ c.html_url }}">HTML</a> | <a href="{{ c.pdf_url }}">PDF</a></p>
+<p><em>Why you're seeing this:</em> {{ t.rationale }}</p>
+<p>{{ c.abstract }}</p>
+</div>
+{% endfor %}
+{% if overflow %}
+<h2>Overflow</h2>
+<ul>
+{% for t in overflow %}
+<li>[{{ t.score }}] <a href="{{ t.candidate.abs_url }}">{{ t.candidate.title }}</a> &mdash; {{ t.candidate.arxiv_id }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+<hr>
+<p><small>Model: {{ model }}</small></p>
+</body>
+</html>

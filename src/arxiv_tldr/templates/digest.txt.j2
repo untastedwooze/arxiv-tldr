@@ -1,0 +1,21 @@
+arxiv-tldr - {{ announcement.isoformat() }}
+{{ featured|length }} featured, {{ overflow|length }} overflow, {{ triaged_count }} triaged.
+{% for t in featured %}
+{% set c = t.candidate %}
+
+{{ c.title }} [{{ t.score }}/10]
+{{ authors_line(c.authors) }} | {{ ([c.primary_category] + c.cross_list_categories)|join(", ") }} | {{ c.arxiv_id }}
+abs: {{ c.abs_url }}  HTML: {{ c.html_url }}  PDF: {{ c.pdf_url }}
+Why you're seeing this: {{ t.rationale }}
+
+{{ c.abstract }}
+{% endfor %}
+{% if overflow %}
+
+Overflow
+{% for t in overflow %}
+[{{ t.score }}] {{ t.candidate.title }} - {{ t.candidate.arxiv_id }} {{ t.candidate.abs_url }}
+{% endfor %}
+{% endif %}
+
+Model: {{ model }}

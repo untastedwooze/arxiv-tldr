@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -21,6 +21,21 @@ CREATE TABLE IF NOT EXISTS candidates (
     html_url TEXT NOT NULL,
     pdf_url TEXT NOT NULL,
     PRIMARY KEY (announcement_date, arxiv_id)
+);
+CREATE TABLE IF NOT EXISTS triage_results (
+    announcement_date TEXT NOT NULL,
+    arxiv_id TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    rationale TEXT NOT NULL,
+    model TEXT NOT NULL,
+    seconds REAL NOT NULL,
+    PRIMARY KEY (announcement_date, arxiv_id)
+);
+CREATE TABLE IF NOT EXISTS digests (
+    announcement_date TEXT PRIMARY KEY,
+    featured_count INTEGER NOT NULL,
+    overflow_count INTEGER NOT NULL,
+    sent_at TEXT                         -- NULL until the mail server accepts the message
 );
 """
 
@@ -87,6 +102,56 @@ class Store:
             )
             for row in rows
         ]
+
+    def untriaged(self, announcement: date) -> list[Candidate]:
+        done = {
+            row["arxiv_id"]
+            for row in self._db.execute(
+                "SELECT arxiv_id FROM triage_results WHERE announcement_date = ?",
+                (announcement.isoformat(),),
+            )
+        }
+        return [c for c in self.candidates(announcement) if c.arxiv_id not in done]
+
+    def add_triage_result(
+        self, announcement: date, arxiv_id: str, *, score: int, rationale: str, model: str,
+        seconds: float,
+    ) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT OR IGNORE INTO triage_results VALUES (?,?,?,?,?,?)",
+                (announcement.isoformat(), arxiv_id, score, rationale, model, seconds),
+            )
+
+    def triaged(self, announcement: date) -> list[TriagedCandidate]:
+        by_id = {c.arxiv_id: c for c in self.candidates(announcement)}
+        rows = self._db.execute(
+            "SELECT * FROM triage_results WHERE announcement_date = ? ORDER BY arxiv_id",
+            (announcement.isoformat(),),
+        )
+        return [
+            TriagedCandidate(
+                candidate=by_id[r["arxiv_id"]],
+                score=r["score"], rationale=r["rationale"], model=r["model"],
+            )
+            for r in rows
+        ]
+
+    def digest_sent(self, announcement: date) -> bool:
+        row = self._db.execute(
+            "SELECT sent_at FROM digests WHERE announcement_date = ?",
+            (announcement.isoformat(),),
+        ).fetchone()
+        return row is not None and row["sent_at"] is not None
+
+    def mark_digest_sent(
+        self, announcement: date, *, featured: int, overflow: int, sent_at: datetime
+    ) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO digests VALUES (?,?,?,?)",
+                (announcement.isoformat(), featured, overflow, sent_at.isoformat()),
+            )
 
 
 _JSON_FIELDS = {"authors", "cross_list_categories"}
