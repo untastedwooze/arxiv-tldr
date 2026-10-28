@@ -20,6 +20,7 @@ Why you're seeing this: {{ t.rationale }}
 {{ label }}: {{ summary.fields[key] }}
 {% endfor %}
 {% else %}
+[Summary unavailable: the model's output was unusable; abstract shown instead]
 {{ c.abstract }}
 {% endif %}
 {% endfor %}
