@@ -11,7 +11,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict
 
-DEFAULT_WATCHED_CATEGORIES = ("q-fin", "stat.ME", "stat.AP", "stat.CO", "stat.ML")
+DEFAULT_WATCHED_CATEGORIES = ("q-fin", "stat.ME", "econ.EM")
 CONTEXT_RESERVE_TOKENS = 4096  # profile, instructions and the generated Summary
 CHARS_PER_TOKEN = 3
 ENV_PREFIX = "ARXIV_TLDR_"

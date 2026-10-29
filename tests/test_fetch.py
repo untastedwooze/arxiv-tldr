@@ -99,7 +99,7 @@ def test_cli_fetch_subcommand(tmp_path, clock, monkeypatch):
 
 def test_default_watched_categories_match_spec():
     assert Config().watched_categories == (
-        "q-fin", "stat.ME", "stat.AP", "stat.CO", "stat.ML",
+        "q-fin", "stat.ME", "econ.EM",
     )
 
 
