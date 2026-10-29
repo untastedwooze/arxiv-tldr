@@ -25,7 +25,10 @@
 {%- endmacro %}
 <body style="margin: 0;">
 <div style="font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; color: #222; max-width: 640px; margin: auto; padding: 12px; line-height: 1.45;">
-<h1 style="font-size: 22px; margin-bottom: 0;">arxiv-tldr &middot; {{ announcement_label }}</h1>
+<h1 style="font-size: 22px; margin-bottom: 0;">arxiv-tldr &middot; {{ "Late Digest for " if late }}{{ announcement_label }}</h1>
+{% if reconstructed %}
+<p style="font-size: 13px; color: #a15c00; border: 1px solid #e0b060; border-radius: 3px; padding: 4px 8px;">Reconstructed Announcement: the Candidates were inferred from submission dates, so papers held for moderation or cross-listed later may be missing.</p>
+{% endif %}
 <p style="color: #666; margin-top: 2px;">{{ featured|length }} featured, {{ overflow|length }} overflow, {{ triaged_count }} triaged.</p>
 {% for t in featured %}
 {% set c = t.candidate %}

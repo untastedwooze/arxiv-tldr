@@ -12,7 +12,7 @@ from test_run import FEEDS, SCORES, setup
 
 D = date(2026, 10, 26)
 BEFORE_CUTOFF = datetime(2026, 10, 27, 1, 0, tzinfo=timezone.utc)  # 21:00 ET on the 26th
-AFTER_CUTOFF = datetime(2026, 10, 27, 10, 0, tzinfo=timezone.utc)  # 06:00 ET on the 27th
+AFTER_CUTOFF = datetime(2026, 10, 27, 7, 50, tzinfo=timezone.utc)  # 03:50 ET: one retry sleep crosses the cutoff
 
 
 class Time:
@@ -47,7 +47,7 @@ def test_unreachable_past_cutoff_sends_failure_notice_and_no_digest(tmp_path):
     assert "2026-10-26" in notice.subject and "arxiv-tldr" in notice.subject
     assert "featured" not in notice.subject
     assert "unreachable" in notice.text and "unreachable" in notice.html
-    assert t.slept == []
+    assert t.slept == [1200]  # the one retry sleep crosses the cutoff
     assert "unreachable" in Store(config.db_path).failure_notice(D)
 
 

@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS call_timings (
     seconds REAL NOT NULL,
     PRIMARY KEY (announcement_date, kind, arxiv_id)
 );
+CREATE TABLE IF NOT EXISTS candidate_sources (
+    announcement_date TEXT PRIMARY KEY,
+    source TEXT NOT NULL                 -- 'rss', 'catchup' or 'reconstructed'
+);
 CREATE TABLE IF NOT EXISTS digests (
     announcement_date TEXT PRIMARY KEY,
     featured_count INTEGER NOT NULL,
@@ -129,6 +133,21 @@ class Store:
                     for c in candidates
                 ],
             )
+
+    def set_candidate_source(self, announcement: date, source: str) -> None:
+        """Record where an Announcement's Candidates came from: rss, catchup or reconstructed."""
+        with self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO candidate_sources VALUES (?,?)",
+                (announcement.isoformat(), source),
+            )
+
+    def candidate_source(self, announcement: date) -> str | None:
+        row = self._db.execute(
+            "SELECT source FROM candidate_sources WHERE announcement_date = ?",
+            (announcement.isoformat(),),
+        ).fetchone()
+        return row["source"] if row else None
 
     def candidates(self, announcement: date) -> list[Candidate]:
         rows = self._db.execute(

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <title>arXiv Query</title>
+  <opensearch:totalResults>3</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <opensearch:itemsPerPage>2000</opensearch:itemsPerPage>
+  <entry>
+    <id>http://arxiv.org/abs/2610.00001v1</id>
+    <published>2026-10-26T15:00:00Z</published>
+    <title>Volatility Forecasting
+  with Rough Paths</title>
+    <summary>  We forecast volatility using rough path signatures.
+</summary>
+    <author><name>Alice Smith</name></author>
+    <author><name>Bob Jones</name></author>
+    <arxiv:primary_category term="q-fin.ST"/>
+    <category term="q-fin.ST"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.00004v1</id>
+    <published>2026-10-26T16:00:00Z</published>
+    <title>Robust Portfolio Selection via Optimal Transport</title>
+    <summary>Optimal transport for robust portfolios.</summary>
+    <author><name>Frank Moe</name></author>
+    <arxiv:primary_category term="math.OC"/>
+    <category term="math.OC"/>
+    <category term="q-fin.PM"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.00005v1</id>
+    <published>2026-10-26T17:00:00Z</published>
+    <title>A bootstrap for dependent data</title>
+    <summary>Resampling dependent observations.</summary>
+    <author><name>Hal Boot</name></author>
+    <arxiv:primary_category term="stat.ME"/>
+    <category term="stat.ME"/>
+    <category term="q-fin.ST"/>
+  </entry>
+</feed>

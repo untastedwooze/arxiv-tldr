@@ -84,6 +84,49 @@ def html_handler(pages: dict[str, str]):
     return handler
 
 
+def catchup_handler(
+    pages: dict[tuple[str, str], str | int], requests: list | None = None
+):
+    """Serve saved catchup fixtures at arxiv.org/catchup/<category>/<listing date>.
+
+    ``pages`` maps (category, listing date) to a fixture name, or to an HTTP status (e.g. 400
+    for a date outside catchup's window); unlisted pages are 404."""
+
+    def handler(request: httpx.Request) -> httpx.Response | None:
+        prefix = "/catchup/"
+        if request.url.host != "arxiv.org" or not request.url.path.startswith(prefix):
+            return None
+        if requests is not None:
+            requests.append(request)
+        category, _, listing = request.url.path[len(prefix):].partition("/")
+        page = pages.get((category, listing))
+        if isinstance(page, int):
+            return httpx.Response(page)
+        if page is not None:
+            return httpx.Response(200, text=(FIXTURES / page).read_text())
+        return httpx.Response(404)
+
+    return handler
+
+
+def api_handler(responses: dict[str, str], requests: list | None = None):
+    """Serve saved Atom fixtures at export.arxiv.org/api/query, keyed by the category named in
+    ``search_query`` (``cat:<category>...``)."""
+
+    def handler(request: httpx.Request) -> httpx.Response | None:
+        if request.url.host != "export.arxiv.org" or request.url.path != "/api/query":
+            return None
+        if requests is not None:
+            requests.append(request)
+        query = request.url.params["search_query"]
+        for category, name in responses.items():
+            if f"cat:{category}" in query:
+                return httpx.Response(200, text=(FIXTURES / name).read_text())
+        return httpx.Response(404)
+
+    return handler
+
+
 def make_pdf(*pages: str) -> bytes:
     """A tiny PDF with one page per string (each string may contain newlines)."""
     import pymupdf
@@ -131,4 +174,4 @@ class FakeMailer:
 
 @pytest.fixture
 def clock():
-    return lambda: datetime(2026, 10, 26, 1, 0, tzinfo=timezone.utc)
+    return lambda: datetime(2026, 10, 27, 1, 0, tzinfo=timezone.utc)

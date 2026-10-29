@@ -10,10 +10,11 @@ from datetime import date, datetime, timezone
 
 import httpx
 
+from .announcement import current_announcement
 from .config import ConfigError, load_config
 from .feed import fetch
 from .mailer import GmailMailer, Mailer
-from .pipeline import current_announcement, run, send_step, summarize_step, triage_step
+from .pipeline import RETRYABLE, run, send_step, summarize_step, triage_step
 from .store import Store
 
 
@@ -66,11 +67,23 @@ def main(
     with nullcontext(client) if client else httpx.Client(timeout=30, follow_redirects=True) as http:
         if args.command == "run":
             mailer = mailer or GmailMailer(config.gmail_address, config.gmail_app_password)
-            announcement = args.announcement or current_announcement(clock, config)
-            run(
-                announcement, config=config, client=http, mailer=mailer, clock=clock,
-                sleep=sleep or time.sleep,
-            )
+            current = current_announcement(clock, config)
+            announcement = args.announcement or current
+            if announcement > current:
+                print(
+                    f"arxiv-tldr: {announcement} is in the future; the current Announcement "
+                    f"is {current}", file=sys.stderr,
+                )
+                return 2
+            try:
+                run(
+                    announcement, config=config, client=http, mailer=mailer, clock=clock,
+                    sleep=sleep or time.sleep,
+                )
+            except RETRYABLE as exc:
+                # Only a backfill raises: the nightly run retries and sends a Failure Notice.
+                print(f"arxiv-tldr: {exc}", file=sys.stderr)
+                return 1
             return 0
         if args.command in ("triage", "summarize", "send"):
             store = Store(config.db_path)
@@ -88,7 +101,8 @@ def main(
                 print(f"{args.announcement}: {'sent' if sent else 'already sent'}")
             return 0
         candidates = fetch(
-            args.announcement, config=config, client=http, store=Store(config.db_path), clock=clock
+            args.announcement, config=config, client=http, store=Store(config.db_path), clock=clock,
+            sleep=sleep or time.sleep,
         )
     print(f"{args.announcement}: {len(candidates)} candidates")
     return 0

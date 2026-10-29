@@ -9,6 +9,9 @@ uv run python scripts/smoke_piglet.py --date 2026-10-26      # or: uv run python
 uv run python scripts/smoke_piglet.py --db smoke.db --send   # keep the DB, really email the Digest
 ```
 
+`--date` may be a past Announcement: it is then a backfill (see `docs/scheduling.md`), read from arXiv's
+catchup listing, so a smoke run can target a known date.
+
 Config comes from the usual `config.toml` / `.env` (Ollama URL, model, profile). The Store
 defaults to a fresh temp file, so reruns start clean; the DB path is printed.
 

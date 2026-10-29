@@ -1,4 +1,7 @@
-arxiv-tldr - {{ announcement_label }}
+arxiv-tldr - {{ "Late Digest for " if late }}{{ announcement_label }}
+{% if reconstructed %}
+Reconstructed Announcement: the Candidates were inferred from submission dates, so papers held for moderation or cross-listed later may be missing.
+{% endif %}
 {{ featured|length }} featured, {{ overflow|length }} overflow, {{ triaged_count }} triaged.
 {% for t in featured %}
 {% set c = t.candidate %}

@@ -36,6 +36,7 @@ def render_digest(
     announcement: date, selection: Selection, *, summaries: dict[str, StoredSummary],
     triaged_count: int, model: str,
     recipients: list[str], duration_seconds: float = 0, failure_count: int = 0,
+    late: bool = False, reconstructed: bool = False,
 ) -> Message:
     context = {
         "announcement": announcement,
@@ -47,9 +48,12 @@ def render_digest(
         "model": model,
         "run_time": format_duration(duration_seconds),
         "failure_count": failure_count,
+        "late": late,
+        "reconstructed": reconstructed,
     }
+    label = f"Late Digest for {announcement:%a %Y-%m-%d}" if late else f"{announcement:%a %Y-%m-%d}"
     subject = (
-        f"arxiv-tldr · {announcement:%a %Y-%m-%d} · {len(selection.featured)} featured / "
+        f"arxiv-tldr · {label} · {len(selection.featured)} featured / "
         f"{len(selection.overflow)} overflow / {triaged_count} triaged"
     )
     return Message(

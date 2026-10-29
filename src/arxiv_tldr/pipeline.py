@@ -7,11 +7,11 @@ rerun safely and ``run`` is just the steps in order.
 import logging
 import time
 from collections.abc import Callable
-from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date, datetime
 
 import httpx
 
+from .announcement import cutoff_time, current_announcement
 from .config import Config
 from .digest import render_digest
 from .feed import FeedError, fetch
@@ -24,7 +24,6 @@ from .summarize import summarize
 from .triage import triage
 
 log = logging.getLogger(__name__)
-EASTERN = ZoneInfo("America/New_York")
 # What makes a whole attempt worth retrying: the host, a feed, or the network is down.
 
 
@@ -33,21 +32,6 @@ class AttemptFailed(Exception):
 
 
 RETRYABLE = (OllamaUnreachable, FeedError, httpx.TransportError, AttemptFailed)
-
-
-def current_announcement(clock: Callable[[], datetime], config: Config) -> date:
-    """The Announcement whose retry window is open now: before the cutoff time (Eastern) it is
-    still the previous day's, so a catch-up run after midnight resolves correctly."""
-    hour, minute = map(int, config.cutoff.split(":"))
-    now = clock().astimezone(EASTERN)
-    return (now - timedelta(hours=hour, minutes=minute)).date()
-
-
-def cutoff_time(announcement: date, config: Config) -> datetime:
-    """When to stop retrying: the configured Eastern time on the morning after."""
-    hour, minute = map(int, config.cutoff.split(":"))
-    morning = announcement + timedelta(days=1)
-    return datetime(morning.year, morning.month, morning.day, hour, minute, tzinfo=EASTERN)
 
 
 def triage_step(
@@ -75,10 +59,11 @@ def summarize_step(
 
 def send_step(
     announcement: date, *, config: Config, mailer: Mailer, clock: Callable[[], datetime],
-    store: Store, started: datetime | None = None,
+    store: Store, started: datetime | None = None, resend: bool = False,
 ) -> bool:
-    """Send the Digest unless one was already sent; marked sent only once the mailer accepts."""
-    if store.digest_sent(announcement):
+    """Send the Digest unless one was already sent (or ``resend``); marked sent only once the
+    mailer accepts. A Digest for an Announcement before the current one is a Late Digest."""
+    if store.digest_sent(announcement) and not resend:
         return False
     started = started or clock()
     triaged = store.triaged(announcement)
@@ -90,6 +75,8 @@ def send_step(
         model=config.ollama_model, recipients=list(config.recipients),
         duration_seconds=(clock() - started).total_seconds(),
         failure_count=len(store.candidates(announcement)) - len(triaged) + summary_failures,
+        late=announcement < current_announcement(lambda: started, config),
+        reconstructed=store.candidate_source(announcement) == "reconstructed",
     )
     try:
         mailer.send(message)
@@ -122,6 +109,36 @@ def send_failure_notice(
     store.record_failure_notice(announcement, reason=reason, sent_at=clock())
 
 
+def backfill(
+    announcement: date, *, config: Config, client: httpx.Client, mailer: Mailer,
+    clock: Callable[[], datetime], store: Store, sleep: Callable[[float], None],
+    started: datetime,
+) -> None:
+    """Process a past Announcement once and send a Late Digest.
+
+    Nothing blocks it (a stored Digest or Failure Notice is ignored and the Digest is sent
+    again); stored Candidates, Triage results and Summaries are reused. There is no retry and no
+    Failure Notice: a failure propagates to the caller.
+    """
+    log.info("backfilling Announcement %s with %s at %s",
+             announcement, config.ollama_model, config.ollama_base_url)
+    if not store.candidates(announcement):
+        fetch(announcement, config=config, client=client, store=store,
+              clock=lambda: started, sleep=sleep)
+        if not store.candidates(announcement):
+            log.info("no Candidates for %s; nothing to send", announcement)
+            return
+    triage_step(announcement, config=config, client=client, store=store)
+    if not store.triaged(announcement):
+        raise AttemptFailed("no Candidate could be triaged (invalid model output)")
+    summarize_step(announcement, config=config, client=client, store=store)
+    send_step(announcement, config=config, mailer=mailer, clock=clock, store=store,
+              started=started, resend=True)
+    if not store.digest_sent(announcement):
+        raise AttemptFailed("the mail server rejected the Digest")
+    log.info("Late Digest for %s sent", announcement)
+
+
 def run(
     announcement: date,
     *,
@@ -139,6 +156,10 @@ def run(
     """
     started = clock()
     store = store or Store(config.db_path)
+    if announcement < current_announcement(lambda: started, config):
+        backfill(announcement, config=config, client=client, mailer=mailer, clock=clock,
+                 store=store, sleep=sleep, started=started)
+        return
     if store.digest_sent(announcement) or store.failure_notice(announcement) is not None:
         log.info("%s already handled; nothing to do", announcement)
         return
@@ -151,7 +172,8 @@ def run(
             if not processed:
                 # Candidates already stored (an earlier attempt got this far) need no refetch.
                 if not store.candidates(announcement):
-                    fetch(announcement, config=config, client=client, store=store, clock=clock)
+                    fetch(announcement, config=config, client=client, store=store,
+                          clock=lambda: started)
                     if not store.candidates(announcement):
                         log.info("no Candidates for %s; nothing to send", announcement)
                         return
