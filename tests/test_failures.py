@@ -104,7 +104,10 @@ def test_malformed_feed_is_a_failure_not_a_crash(tmp_path):
 
 def test_empty_feeds_send_nothing_and_record_no_failure(tmp_path):
     config, _, mailer, _ = setup(tmp_path)
-    empty = '<rss version="2.0"><channel><title>q-fin</title></channel></rss>'
+    empty = (
+        '<rss version="2.0"><channel><title>q-fin</title>'
+        "<pubDate>Tue, 27 Oct 2026 00:00:00 -0400</pubDate></channel></rss>"
+    )
     client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, text=empty)))
     t = Time(BEFORE_CUTOFF)
     run(D, config=config, client=client, mailer=mailer, clock=t.clock, sleep=t.sleep)
@@ -165,3 +168,36 @@ def test_rejected_digest_is_retried_until_the_cutoff(tmp_path):
     assert t.slept == [1200, 1200]
     assert len(mailer.sent) == 1 and "3 featured" in mailer.sent[0].subject
     assert len(requests) == 4 + 3  # only the send was retried
+
+
+STALE = {"q-fin": "rss_q-fin_stale.xml", "stat.ME": "rss_stat.ME_stale.xml"}
+
+
+def test_stale_feed_then_fresh_feed_retries_and_sends_fresh_papers(tmp_path):
+    config, _, mailer, _ = setup(tmp_path)
+    t = Time(BEFORE_CUTOFF)
+    stale, fresh = rss_handler(STALE), rss_handler(FEEDS)
+
+    def feeds(request):
+        return fresh(request) if t.slept else stale(request)
+
+    client = httpx.Client(transport=combined_transport(ollama_handler(SCORES), feeds))
+    run(D, config=config, client=client, mailer=mailer, clock=t.clock, sleep=t.sleep)
+
+    assert t.slept == [1200]
+    assert len(mailer.sent) == 1 and "3 featured" in mailer.sent[0].subject
+
+
+def test_stale_feed_until_cutoff_sends_failure_notice_and_stores_no_candidates(tmp_path):
+    config, _, mailer, _ = setup(tmp_path)
+    client = httpx.Client(transport=combined_transport(ollama_handler(SCORES), rss_handler(STALE)))
+    t = Time(BEFORE_CUTOFF)
+    run(D, config=config, client=client, mailer=mailer, clock=t.clock, sleep=t.sleep)
+
+    assert len(t.slept) == 21
+    assert len(mailer.sent) == 1 and "featured" not in mailer.sent[0].subject
+    assert "holds the 2026-10-26 listing" in mailer.sent[0].text
+    assert "2026-10-27" in mailer.sent[0].text
+    store = Store(config.db_path)
+    assert store.candidates(D) == []
+    assert "listing" in store.failure_notice(D)

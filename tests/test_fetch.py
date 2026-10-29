@@ -65,7 +65,14 @@ def test_refetching_same_date_does_not_duplicate(tmp_path, clock):
 def test_same_paper_on_another_announcement_is_a_separate_candidate(tmp_path, clock):
     config, client, store = make(tmp_path)
     fetch(D, config=config, client=client, store=store, clock=clock)
-    fetch(date(2026, 10, 27), config=config, client=client, store=store, clock=clock)
+    inner = rss_transport(FEEDS)
+
+    def next_day(request):  # the same papers, as the next evening's feed
+        text = inner.handle_request(request).read().decode()
+        return httpx.Response(200, text=text.replace("Tue, 27 Oct", "Wed, 28 Oct", 1))
+
+    next_client = httpx.Client(transport=httpx.MockTransport(next_day))
+    fetch(date(2026, 10, 27), config=config, client=next_client, store=store, clock=clock)
     assert len(store.candidates(D)) == 4
     assert len(store.candidates(date(2026, 10, 27))) == 4
 

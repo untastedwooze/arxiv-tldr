@@ -3,7 +3,9 @@
 import logging
 import re
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from email.utils import parsedate_to_datetime
+from zoneinfo import ZoneInfo
 
 import feedparser
 import httpx
@@ -56,6 +58,20 @@ def _parse_feed(xml: str) -> list[Candidate]:
     return candidates
 
 
+_EASTERN = ZoneInfo("America/New_York")
+
+
+def listing_date(xml: str) -> date:
+    """The arXiv listing date a feed holds: its channel pubDate, as a US-Eastern date."""
+    pub = feedparser.parse(xml).feed.get("published")
+    if not pub:
+        raise FeedError("malformed feed: no pubDate")
+    try:
+        return parsedate_to_datetime(pub).astimezone(_EASTERN).date()
+    except (TypeError, ValueError) as exc:
+        raise FeedError(f"malformed feed: bad pubDate {pub!r}") from exc
+
+
 def fetch(
     announcement: date,
     *,
@@ -66,7 +82,8 @@ def fetch(
 ) -> list[Candidate]:
     """Record the Candidates of an Announcement; returns those found in the feeds.
 
-    ``clock`` is part of the seam for later date-validation logic; unused so far.
+    A feed still holding an earlier release raises FeedError and stores nothing. ``clock`` is
+    unused: the check compares the feed against the requested Announcement only.
     """
     merged: dict[str, Candidate] = {}
     for category in config.watched_categories:
@@ -76,6 +93,13 @@ def fetch(
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise FeedError(f"feed {category} failed: HTTP {exc.response.status_code}") from exc
+        expected = announcement + timedelta(days=1)  # arXiv labels a release with the next day
+        actual = listing_date(response.text)
+        if actual != expected:
+            raise FeedError(
+                f"feed {category} holds the {actual} listing, not the {expected} listing "
+                f"of the {announcement} Announcement"
+            )
         for candidate in parse_feed(response.text):
             seen = merged.get(candidate.arxiv_id)
             # A paper in several Watched Categories is one Candidate; "new" outranks "cross".

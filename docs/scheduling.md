@@ -3,7 +3,8 @@
 A systemd user timer runs `arxiv-tldr run` Sunday-Thursday at 21:30 America/New_York, after
 arXiv's ~20:00 ET Announcement. `run` takes no date: it defaults to today's Announcement date
 in America/New_York. `Persistent=true` means a run missed while the machine was asleep or off
-happens when it comes back. The run sleeps until the Announcement's papers are available (up to
+happens when it comes back. The run checks that each RSS feed holds the Announcement's listing (arXiv labels it with the
+next day) and, while the feed is still on the previous release, sleeps and retries (up to
 the 04:00 ET cutoff), so the service may run for hours; it has no start timeout.
 
 ## Install

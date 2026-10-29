@@ -54,8 +54,16 @@ def test_cli_run_after_midnight_eastern_resolves_the_previous_announcement(tmp_p
 
 def test_cli_run_after_the_cutoff_resolves_todays_announcement(tmp_path, monkeypatch):
     client, mailer, _ = cli_setup(tmp_path, monkeypatch)
+    fresh = rss_handler(FEEDS)
+
+    def wed_listing(request):  # Tuesday's Announcement is the Wed 28 Oct listing
+        response = fresh(request)
+        if response is None or response.status_code != 200:
+            return response
+        return httpx.Response(200, text=response.text.replace("Tue, 27 Oct", "Wed, 28 Oct", 1))
+
+    client = httpx.Client(transport=combined_transport(wed_listing, ollama_handler(SCORES)))
     morning = lambda: datetime(2026, 10, 27, 12, 0, tzinfo=timezone.utc)  # 08:00 ET Tuesday
-    # The fixture feeds carry no date, so whatever is fetched is stored under the resolved day.
     assert main(["run"], client=client, clock=morning, mailer=mailer) == 0
     assert "Tue 2026-10-27" in mailer.sent[0].subject
 
