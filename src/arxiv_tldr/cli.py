@@ -1,6 +1,7 @@
 """Command-line entry point: ``arxiv-tldr fetch YYYY-MM-DD``."""
 
 import argparse
+import logging
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -16,6 +17,14 @@ from .pipeline import current_announcement, run, send_step, summarize_step, tria
 from .store import Store
 
 
+def configure_logging(verbose: bool) -> None:
+    """Log progress to stderr (so it reaches the systemd journal) when ``verbose``."""
+    logging.basicConfig(
+        level=logging.INFO if verbose else logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -26,6 +35,7 @@ def main(
 ) -> int:
     """Run a subcommand. ``client``, ``clock`` and ``mailer`` are the injected seams."""
     parser = argparse.ArgumentParser(prog="arxiv-tldr")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Log progress to stderr")
     sub = parser.add_subparsers(dest="command", required=True)
     fetch_parser = sub.add_parser("fetch", help="Fetch an Announcement's Candidates into the Store")
     fetch_parser.add_argument("announcement", type=date.fromisoformat, help="Announcement date")
@@ -42,6 +52,7 @@ def main(
         step_parser = sub.add_parser(name, help=text)
         step_parser.add_argument("announcement", type=date.fromisoformat, help="Announcement date")
     args = parser.parse_args(argv)
+    configure_logging(args.verbose)
 
     config = load_config()
     clock = clock or (lambda: datetime.now(timezone.utc))

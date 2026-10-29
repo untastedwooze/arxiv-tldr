@@ -1,5 +1,6 @@
 """Triage: score every untriaged Candidate against the Interest Profile."""
 
+import logging
 from datetime import date
 
 from pydantic import BaseModel, Field
@@ -7,10 +8,12 @@ from pydantic import BaseModel, Field
 from .llm import BadLLMOutput, OllamaClient
 from .store import Candidate, Store
 
+log = logging.getLogger(__name__)
+
 
 class TriageVerdict(BaseModel):
     # Field order matters: the Rationale is generated before the score.
-    rationale: str = Field(description="One sentence explaining the score.")
+    rationale: str = Field(description="One sentence, at most 25 words, explaining the score.")
     score: int = Field(ge=1, le=10, description="Relevance to the Interest Profile, 1-10.")
 
 
@@ -21,7 +24,7 @@ def build_prompt(profile: str, candidate: Candidate) -> str:
         f"{profile.strip()}\n\n"
         "----\n"
         "Judge how relevant the paper below is to the reader described above. "
-        "Write a one-sentence rationale first, then a relevance score from 1 (irrelevant) "
+        "Write a one-sentence rationale (at most 25 words) first, then a relevance score from 1 (irrelevant) "
         "to 10 (must read).\n\n"
         f"Title: {candidate.title}\n"
         f"Categories: {categories}\n"
@@ -35,11 +38,17 @@ def triage(announcement: date, *, profile: str, llm: OllamaClient, store: Store)
     A Candidate whose output stays invalid is left untriaged; an unreachable host propagates.
     """
     scored = 0
-    for candidate in store.untriaged(announcement):
+    pending = store.untriaged(announcement)
+    log.info("triaging %d candidates for %s", len(pending), announcement)
+    for i, candidate in enumerate(pending, 1):
         try:
             verdict, seconds = llm.generate(build_prompt(profile, candidate), TriageVerdict)
-        except BadLLMOutput:
+        except BadLLMOutput as exc:
+            log.warning("triage %d/%d %s: invalid model output: %s",
+                        i, len(pending), candidate.arxiv_id, exc)
             continue
+        log.info("triage %d/%d %s score %d (%.1fs)",
+                 i, len(pending), candidate.arxiv_id, verdict.score, seconds)
         store.add_triage_result(
             announcement, candidate.arxiv_id,
             score=verdict.score, rationale=verdict.rationale, model=llm.model, seconds=seconds,

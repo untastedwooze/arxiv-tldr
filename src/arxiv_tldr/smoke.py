@@ -15,6 +15,7 @@ from pathlib import Path
 import httpx
 from pydantic import BaseModel
 
+from .cli import configure_logging
 from .config import load_config
 from .mailer import GmailMailer, Message
 from .pipeline import run
@@ -91,7 +92,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="Announcement date (default: today)")
     parser.add_argument("--db", type=Path, help="Store path (default: a fresh temp file)")
     parser.add_argument("--send", action="store_true", help="Really email the Digest via Gmail")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress progress logging")
     args = parser.parse_args(argv)
+    configure_logging(not args.quiet)
 
     config = load_config()
     db_path = args.db or Path(tempfile.mkdtemp(prefix="arxiv-tldr-smoke-")) / "smoke.db"
@@ -108,6 +111,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(format_report(smoke_report(store, args.date), store.call_timings(args.date)))
     if isinstance(mailer, RecordingMailer):
         print("\nNo email sent (use --send). Digest subjects:", [m.subject for m in mailer.sent])
+        for i, message in enumerate(mailer.sent):
+            html_path = db_path.with_name(f"digest-{args.date}{f'-{i}' if i else ''}.html")
+            html_path.write_text(message.html)
+            print(f"Digest HTML ({len(message.html.encode()) // 1024} KB): {html_path}")
     return 0
 
 

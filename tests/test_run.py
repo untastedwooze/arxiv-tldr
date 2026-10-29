@@ -96,6 +96,7 @@ def test_triage_prompt_starts_with_interest_profile_and_asks_json_schema(tmp_pat
     for body in requests:
         assert body["prompt"].startswith("I care about volatility and tail risk.")
         assert body["stream"] is False
+        assert body["think"] is False
         assert body["format"]["properties"].keys() >= {"rationale", "score"}
         assert body["options"]["temperature"] <= 0.2
         assert body["model"] == config.ollama_model

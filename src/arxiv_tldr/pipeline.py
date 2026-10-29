@@ -140,7 +140,10 @@ def run(
     started = clock()
     store = store or Store(config.db_path)
     if store.digest_sent(announcement) or store.failure_notice(announcement) is not None:
+        log.info("%s already handled; nothing to do", announcement)
         return
+    log.info("processing Announcement %s with %s at %s",
+             announcement, config.ollama_model, config.ollama_base_url)
     cutoff = cutoff_time(announcement, config)
     processed = False
     while True:
@@ -150,18 +153,21 @@ def run(
                 if not store.candidates(announcement):
                     fetch(announcement, config=config, client=client, store=store, clock=clock)
                     if not store.candidates(announcement):
+                        log.info("no Candidates for %s; nothing to send", announcement)
                         return
                 triage_step(announcement, config=config, client=client, store=store)
                 if not store.triaged(announcement):
                     raise AttemptFailed("no Candidate could be triaged (invalid model output)")
                 summarize_step(announcement, config=config, client=client, store=store)
                 processed = True
+            log.info("sending Digest for %s", announcement)
             send_step(
                 announcement, config=config, mailer=mailer, clock=clock, store=store,
                 started=started,
             )
             if not store.digest_sent(announcement):
                 raise AttemptFailed("the mail server rejected the Digest")
+            log.info("Digest for %s sent", announcement)
             return
         except RETRYABLE as exc:
             log.warning("attempt for %s failed: %s", announcement, exc)
@@ -172,4 +178,5 @@ def run(
                     clock=clock, store=store,
                 )
                 return
+            log.info("retrying in %d minutes", config.retry_interval_minutes)
             sleep(config.retry_interval_minutes * 60)

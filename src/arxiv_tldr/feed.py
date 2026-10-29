@@ -1,5 +1,6 @@
 """Fetch step: read the arXiv RSS feeds of the Watched Categories into Candidates."""
 
+import logging
 import re
 from collections.abc import Callable
 from datetime import date, datetime
@@ -9,6 +10,8 @@ import httpx
 
 from .config import Config
 from .store import Candidate, Store
+
+log = logging.getLogger(__name__)
 
 KEPT_TYPES = {"new", "cross"}  # drops "replace" and "replace-cross"
 _ID_RE = re.compile(r"^arXiv:(?P<id>\S+?)v\d+\s+Announce Type:")
@@ -67,6 +70,7 @@ def fetch(
     """
     merged: dict[str, Candidate] = {}
     for category in config.watched_categories:
+        log.info("fetching feed %s", category)
         response = client.get(f"{config.rss_base_url}/{category}")
         try:
             response.raise_for_status()
@@ -78,5 +82,6 @@ def fetch(
             if seen is None or (seen.announce_type == "cross" and candidate.announce_type == "new"):
                 merged[candidate.arxiv_id] = candidate
     candidates = list(merged.values())
+    log.info("fetched %d candidates for %s", len(candidates), announcement)
     store.add_candidates(announcement, candidates)
     return candidates

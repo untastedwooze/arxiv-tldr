@@ -35,6 +35,8 @@ class OllamaClient:
             "prompt": prompt,
             "stream": False,
             "format": shape.model_json_schema(),
+            # A thinking model would put its answer in "thinking" and leave "response" empty.
+            "think": False,
             "options": {"temperature": self._temperature, **options},
         }
         last_error: Exception | None = None

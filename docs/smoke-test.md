@@ -1,7 +1,8 @@
 # Smoke test against piglet
 
 Runs one real Announcement end to end (real arXiv, real Ollama, real httpx client) with a
-recording Mailer, then reports from the Store. No email is sent unless you pass `--send`.
+recording Mailer, then reports from the Store. No email is sent unless you pass `--send`;
+instead the Digest HTML is written next to the DB (`digest-<date>.html`) and its path printed.
 
 ```
 uv run python scripts/smoke_piglet.py --date 2026-10-26      # or: uv run python -m arxiv_tldr.smoke

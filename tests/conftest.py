@@ -37,7 +37,6 @@ SUMMARY_FIELDS = {
     "data": "Daily index returns.",
     "key_results": "12% lower error.",
     "limitations": "Single market.",
-    "why_it_matters": "Directly on your volatility interests.",
 }
 
 
