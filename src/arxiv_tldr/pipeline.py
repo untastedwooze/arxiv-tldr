@@ -132,9 +132,8 @@ def backfill(
     if not store.triaged(announcement):
         raise AttemptFailed("no Candidate could be triaged (invalid model output)")
     summarize_step(announcement, config=config, client=client, store=store)
-    send_step(announcement, config=config, mailer=mailer, clock=clock, store=store,
-              started=started, resend=True)
-    if not store.digest_sent(announcement):
+    if not send_step(announcement, config=config, mailer=mailer, clock=clock, store=store,
+                     started=started, resend=True):
         raise AttemptFailed("the mail server rejected the Digest")
     log.info("Late Digest for %s sent", announcement)
 

@@ -9,14 +9,13 @@ import logging
 import re
 import time
 from collections.abc import Callable
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from email.utils import parsedate_to_datetime
-from zoneinfo import ZoneInfo
 
 import feedparser
 import httpx
 
-from .announcement import current_announcement, listing_date_for, submission_window
+from .announcement import EASTERN, current_announcement, listing_date_for, submission_window
 from .config import Config
 from .store import Candidate, Store
 
@@ -71,16 +70,13 @@ def _parse_feed(xml: str) -> list[Candidate]:
     return candidates
 
 
-_EASTERN = ZoneInfo("America/New_York")
-
-
 def listing_date(xml: str) -> date:
     """The arXiv listing date a feed holds: its channel pubDate, as a US-Eastern date."""
     pub = feedparser.parse(xml).feed.get("published")
     if not pub:
         raise FeedError("malformed feed: no pubDate")
     try:
-        return parsedate_to_datetime(pub).astimezone(_EASTERN).date()
+        return parsedate_to_datetime(pub).astimezone(EASTERN).date()
     except (TypeError, ValueError) as exc:
         raise FeedError(f"malformed feed: bad pubDate {pub!r}") from exc
 
@@ -170,6 +166,10 @@ def _parse_catchup_entry(entry: str, announce_type: str) -> Candidate:
 class CatchupUnavailable(Exception):
     """Catchup has no listing for that date (HTTP 400: older than its window)."""
 
+    def __init__(self, url: str, reason: str):
+        super().__init__(f"{url}: {reason}")
+        self.url, self.reason = url, reason
+
 
 # --- API reconstruction ---
 
@@ -254,7 +254,7 @@ def _fetch_catchup(
             params={"abs": "True"},
         )
         if response.status_code == 400:
-            raise CatchupUnavailable(category)
+            raise CatchupUnavailable(str(response.url), f"HTTP 400 {response.text[:200].strip()!r}")
         _ok(response, f"catchup {category}")
         for candidate in parse_catchup(response.text):
             _keep_best(merged, candidate)
@@ -319,8 +319,9 @@ def fetch(
         try:
             merged = _fetch_catchup(announcement, config=config, client=client, sleep=sleep)
             source = "catchup"
-        except CatchupUnavailable:
-            log.info("catchup has no listing for %s; reconstructing from the API", announcement)
+        except CatchupUnavailable as exc:
+            log.warning("catchup refused %s (%s); reconstructing %s from the API",
+                        exc.url, exc.reason, announcement)
             merged = _reconstruct(announcement, config=config, client=client, sleep=sleep)
             source = "reconstructed"
     else:

@@ -14,7 +14,7 @@ from .announcement import current_announcement
 from .config import ConfigError, load_config
 from .feed import fetch
 from .mailer import GmailMailer, Mailer
-from .pipeline import RETRYABLE, run, send_step, summarize_step, triage_step
+from .pipeline import run, send_step, summarize_step, triage_step
 from .store import Store
 
 
@@ -80,9 +80,11 @@ def main(
                     announcement, config=config, client=http, mailer=mailer, clock=clock,
                     sleep=sleep or time.sleep,
                 )
-            except RETRYABLE as exc:
-                # Only a backfill raises: the nightly run retries and sends a Failure Notice.
-                print(f"arxiv-tldr: {exc}", file=sys.stderr)
+            except Exception as exc:
+                # Only a backfill raises (the nightly run retries and sends a Failure Notice),
+                # and whatever it raises is reported as a reason, not a traceback.
+                logging.getLogger(__name__).debug("backfill failed", exc_info=True)
+                print(f"arxiv-tldr: {exc or type(exc).__name__}", file=sys.stderr)
                 return 1
             return 0
         if args.command in ("triage", "summarize", "send"):

@@ -18,17 +18,22 @@ def listing_date_for(announcement: date) -> date:
     return announcement + timedelta(days=1)
 
 
+def _cutoff_hm(config: Config) -> tuple[int, int]:
+    hour, minute = map(int, config.cutoff.split(":"))
+    return hour, minute
+
+
 def current_announcement(clock: Callable[[], datetime], config: Config) -> date:
     """The Announcement whose retry window is open now: before the cutoff time (Eastern) it is
     still the previous day's, so a catch-up run after midnight resolves correctly."""
-    hour, minute = map(int, config.cutoff.split(":"))
+    hour, minute = _cutoff_hm(config)
     now = clock().astimezone(EASTERN)
     return (now - timedelta(hours=hour, minutes=minute)).date()
 
 
 def cutoff_time(announcement: date, config: Config) -> datetime:
     """When to stop retrying: the configured Eastern time on the morning after."""
-    hour, minute = map(int, config.cutoff.split(":"))
+    hour, minute = _cutoff_hm(config)
     morning = announcement + timedelta(days=1)
     return datetime(morning.year, morning.month, morning.day, hour, minute, tzinfo=EASTERN)
 

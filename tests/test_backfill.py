@@ -284,3 +284,57 @@ def test_a_malformed_catchup_page_is_a_feed_error_and_stores_nothing(tmp_path):
     with pytest.raises(FeedError):
         fetch(D, config=config, client=client, store=store, clock=clock, sleep=Sleeps())
     assert store.candidates(D) == []
+
+
+class RejectingMailer:
+    def send(self, message) -> None:
+        raise RuntimeError("535 bad credentials")
+
+
+def test_cli_backfill_resend_rejected_by_the_mailer_exits_nonzero(tmp_path, monkeypatch, capsys):
+    call, mailer, config = cli(tmp_path, monkeypatch, catchup_handler(CATCHUP), ollama_handler(SCORES))
+    assert call("run", "2026-10-26")[0] == 0  # the first Late Digest is stored as sent
+    assert Store(config.db_path).digest_sent(D)
+
+    _, client, _ = setup(tmp_path, catchup_handler(CATCHUP), ollama_handler(SCORES))
+    code = main(["run", "2026-10-26"], client=client, clock=clock, mailer=RejectingMailer(),
+                sleep=Sleeps())
+    assert code == 1
+    assert capsys.readouterr().err.startswith("arxiv-tldr: ")
+
+
+def test_cli_backfill_unexpected_error_is_reported_not_a_traceback(tmp_path, monkeypatch, capsys):
+    def broken(request):
+        if request.url.host == "piglet.example":
+            raise RuntimeError("something odd")
+
+    call, mailer, _ = cli(tmp_path, monkeypatch, catchup_handler(CATCHUP), broken)
+    code, _ = call("run", "2026-10-26")
+    assert code == 1 and mailer.sent == []
+    assert capsys.readouterr().err.startswith("arxiv-tldr: ")
+
+
+def test_catchup_400_is_logged_with_url_when_falling_back(tmp_path, caplog):
+    import logging
+
+    config, client, mailer = setup(
+        tmp_path, catchup_handler(NOT_IN_CATCHUP), api_handler(API), ollama_handler(SCORES)
+    )
+    with caplog.at_level(logging.INFO):
+        run(D, config=config, client=client, mailer=mailer, clock=clock, sleep=Sleeps())
+    assert any(r.name == "arxiv_tldr.feed" and "400" in r.getMessage() and "/catchup/q-fin/2026-10-27" in r.getMessage()
+               for r in caplog.records)
+
+
+def test_stored_candidates_without_a_recorded_source_send_a_plain_late_digest(tmp_path):
+    config, client, mailer = setup(tmp_path, catchup_handler(CATCHUP), ollama_handler(SCORES))
+    store = Store(config.db_path)
+    fetch(D, config=config, client=client, store=store, clock=clock, sleep=Sleeps())
+    store._db.execute("DELETE FROM candidate_sources")  # a legacy row-less Store
+    store._db.commit()
+    assert store.candidate_source(D) is None
+
+    run(D, config=config, client=client, mailer=mailer, clock=clock, store=store, sleep=Sleeps())
+    (message,) = mailer.sent
+    assert "Late Digest" in message.subject
+    assert "inferred" not in message.html and "inferred" not in message.text
