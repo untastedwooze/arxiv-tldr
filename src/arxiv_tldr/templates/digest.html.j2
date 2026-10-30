@@ -1,41 +1,91 @@
+{#
+  Each paper is a hidden checkbox plus a <label> wrapping its whole card, so a click
+  anywhere on the card toggles it (links inside still navigate). The CSS hides a card's
+  body only while a checkbox sits right before it, so clients that strip <input>
+  (Gmail) show every card expanded instead of hiding the Summaries.
+#}
 <!doctype html>
 <html>
-<body style="font-family: sans-serif; max-width: 42em; margin: auto;">
-<h1>arxiv-tldr &middot; {{ announcement_label }}</h1>
-<p>{{ featured|length }} featured, {{ overflow|length }} overflow, {{ triaged_count }} triaged.</p>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<style>
+.tg { display: none; }
+.tg:not(:checked) + label .bd { display: none; }
+.tg:not(:checked) + label .hint::after { content: "\25B8  tap to expand"; }
+.tg:checked + label .hint::after { content: "\25BE  tap anywhere to collapse"; }
+.tg:checked + label .card { border-color: #1a5fb4 !important; }
+</style>
+</head>
+{% macro pill(score) -%}
+<span style="background: {{ {10: '#1b7f3b', 9: '#2e8b57', 8: '#6a8f2e', 7: '#a08a2a'}.get(score, '#888') }}; color: #fff; border-radius: 3px; padding: 1px 6px; font-size: 12px; font-weight: bold;">{{ score }}</span>
+{%- endmacro %}
+{# One style for every text section of a card, so client defaults never leak in. #}
+{% set txt = "font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.45; color: #333; margin: 6px 0;" %}
+{% macro flag(text) -%}
+<span style="font-size: 11px; color: #a15c00; border: 1px solid #e0b060; border-radius: 3px; padding: 0 4px; margin-left: 6px;">{{ text }}</span>
+{%- endmacro %}
+<body style="margin: 0;">
+<div style="font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; color: #222; max-width: 640px; margin: auto; padding: 12px; line-height: 1.45;">
+<h1 style="font-size: 22px; margin-bottom: 0;">arxiv-tldr &middot; {{ "Late Digest for " if late }}{{ announcement_label }}</h1>
+{% if reconstructed %}
+<p style="font-size: 13px; color: #a15c00; border: 1px solid #e0b060; border-radius: 3px; padding: 4px 8px;">Reconstructed Announcement: the Candidates were inferred from submission dates, so papers held for moderation or cross-listed later may be missing.</p>
+{% endif %}
+<p style="color: #666; margin-top: 2px;">{{ featured|length }} featured, {{ overflow|length }} overflow, {{ triaged_count }} triaged.</p>
 {% for t in featured %}
 {% set c = t.candidate %}
-<div style="margin-bottom: 1.5em;">
-<h2>{{ c.title }} <small>[{{ t.score }}/10]</small></h2>
-<p>{{ authors_line(c.authors) }} &middot; {{ ([c.primary_category] + c.cross_list_categories)|join(", ") }} &middot; {{ c.arxiv_id }}</p>
-<p><a href="{{ c.abs_url }}">abs</a> | <a href="{{ c.html_url }}">HTML</a> | <a href="{{ c.pdf_url }}">PDF</a></p>
-<p><em>Why you're seeing this:</em> {{ t.rationale }}</p>
 {% set summary = summaries.get(c.arxiv_id) %}
+<input type="checkbox" class="tg" id="p{{ loop.index }}">
+<label for="p{{ loop.index }}" style="display: block; cursor: pointer;">
+<div class="card" style="border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; margin: 8px 0;">
+<h2 style="font-size: 16px; margin: 0;">{{ pill(t.score) }} {{ c.title }}
+{%- if summary and summary.abstract_only %}{{ flag("Abstract-only summary") }}{% endif %}
+{%- if summary and summary.cut %}{{ flag("Text cut") }}{% endif %}
+{%- if not summary %}{{ flag("Summary unavailable") }}{% endif %}</h2>
+{% if summary %}
+<p style="{{ txt }}"><strong>{{ summary_labels["tldr"] }}:</strong> {{ summary.fields["tldr"] }}</p>
+{% endif %}
+<div class="hint" style="font-size: 11px; color: #1a5fb4; margin-top: 4px;"></div>
+<div class="bd">
+<p style="{{ txt }} font-size: 12px; color: #666;">{{ authors_line(c.authors) }} &middot; {{ ([c.primary_category] + c.cross_list_categories)|join(", ") }} &middot; {{ c.arxiv_id }}
+&middot; <a style="color: #1a5fb4;" href="{{ c.abs_url }}">abs</a> | <a style="color: #1a5fb4;" href="{{ c.html_url }}">HTML</a> | <a style="color: #1a5fb4;" href="{{ c.pdf_url }}">PDF</a></p>
+<p style="{{ txt }}"><strong>Why you're seeing this:</strong> {{ t.rationale }}</p>
 {% if summary %}
 {% if summary.abstract_only %}
-<p><strong>Abstract-only summary</strong> <small>(full text unavailable)</small></p>
+<p style="{{ txt }}"><strong>Abstract-only summary</strong> <small>(full text unavailable)</small></p>
 {% endif %}
 {% if summary.cut %}
-<p><strong>Text cut</strong> <small>(paper was too long; summarized from the first part only)</small></p>
+<p style="{{ txt }}"><strong>Text cut</strong> <small>(paper was too long; summarized from the first part only)</small></p>
 {% endif %}
-{% for key, label in summary_labels.items() %}
-<p><strong>{{ label }}:</strong> {{ summary.fields[key] }}</p>
+{% for key, label in summary_labels.items() if key != "tldr" %}
+<p style="{{ txt }}"><strong>{{ label }}:</strong> {{ summary.fields[key] }}</p>
 {% endfor %}
 {% else %}
-<p><strong>Summary unavailable</strong> <small>(the model's output was unusable; abstract shown instead)</small></p>
-<p>{{ c.abstract }}</p>
+<p style="{{ txt }}"><strong>Summary unavailable</strong> <small>(the model's output was unusable; abstract shown instead)</small></p>
+<p style="{{ txt }}">{{ c.abstract }}</p>
 {% endif %}
 </div>
+</div>
+</label>
 {% endfor %}
 {% if overflow %}
-<h2>Overflow</h2>
-<ul>
-{% for t in overflow %}
-<li>[{{ t.score }}] <a href="{{ t.candidate.abs_url }}">{{ t.candidate.title }}</a> &mdash; {{ t.candidate.arxiv_id }}</li>
+<h2 style="font-size: 18px;">Overflow</h2>
+{% for score, group in overflow|groupby("score")|reverse %}
+<input type="checkbox" class="tg" id="o{{ score }}">
+<label for="o{{ score }}" style="display: block; cursor: pointer;">
+<div class="card" style="border: 1px solid #eee; border-radius: 6px; padding: 6px 10px; margin: 4px 0;">
+{{ pill(score) }} {{ group|length }} paper{{ "s" if group|length != 1 }} <span class="hint" style="font-size: 11px; color: #1a5fb4;"></span>
+<ul class="bd" style="margin: 6px 0;">
+{% for t in group %}
+<li><a style="color: #1a5fb4;" href="{{ t.candidate.abs_url }}">{{ t.candidate.title }}</a> &mdash; {{ t.candidate.arxiv_id }}</li>
 {% endfor %}
 </ul>
+</div>
+</label>
+{% endfor %}
 {% endif %}
-<hr>
-<p><small>Run time: {{ run_time }} &middot; Failures: {{ failure_count }} &middot; Model: {{ model }}</small></p>
+<hr style="border: 0; border-top: 1px solid #ddd;">
+<p style="font-size: 11px; color: #999;">Run time: {{ run_time }} &middot; Failures: {{ failure_count }} &middot; Model: {{ model }}</p>
+</div>
 </body>
 </html>

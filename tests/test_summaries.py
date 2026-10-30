@@ -56,9 +56,9 @@ def test_digest_shows_labelled_summary_fields_from_html(tmp_path, clock):
     msg = mailer.sent[0]
     for label in (
         "TL;DR", "Problem", "Method", "Data", "Key results", "Limitations / caveats",
-        "Why it matters to you",
     ):
         assert label in msg.html and label in msg.text
+    assert "Why it matters to you" not in msg.html  # duplicated the Rationale
     assert "Rough paths forecast volatility." in msg.html
     assert "12% lower error." in msg.text
     assert "Directly about volatility modelling." in msg.html  # Rationale kept

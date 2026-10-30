@@ -11,7 +11,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict
 
-DEFAULT_WATCHED_CATEGORIES = ("q-fin", "stat.ME", "stat.AP", "stat.CO", "stat.ML")
+DEFAULT_WATCHED_CATEGORIES = ("q-fin", "stat.ME", "econ.EM")
 CONTEXT_RESERVE_TOKENS = 4096  # profile, instructions and the generated Summary
 CHARS_PER_TOKEN = 3
 ENV_PREFIX = "ARXIV_TLDR_"
@@ -27,6 +27,10 @@ class Config(BaseModel):
     watched_categories: tuple[str, ...] = DEFAULT_WATCHED_CATEGORIES
     db_path: Path = Path("arxiv-tldr.db")
     rss_base_url: str = "https://rss.arxiv.org/rss"
+    arxiv_base_url: str = "https://arxiv.org"  # catchup listings
+    api_base_url: str = "https://export.arxiv.org"
+    catchup_delay_seconds: float = 15  # arxiv.org/robots.txt Crawl-delay
+    api_delay_seconds: float = 3  # the API terms: at least 3 s between requests
     interest_profile_path: Path = Path("interest-profile.md")
     ollama_base_url: str = "http://piglet.tail2598b1.ts.net:11434"
     ollama_model: str = "qwen3:30b-a3b-instruct-2507-q4_K_M"

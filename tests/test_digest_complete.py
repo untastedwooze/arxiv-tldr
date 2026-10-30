@@ -17,9 +17,10 @@ def test_overflow_header_footer_and_plain_text(tmp_path):
     run(D, config=config, client=client, mailer=mailer, clock=lambda: next(ticks))
     msg = mailer.sent[0]
     assert msg.subject == "arxiv-tldr · Mon 2026-10-26 · 1 featured / 2 overflow / 4 triaged"
+    assert msg.text.index("[9]") < msg.text.index("[7]")
+    assert msg.html.index('id="o9"') < msg.html.index('id="o7"')  # one group per score
     for body in (msg.html, msg.text):
         assert "Overflow" in body
-        assert body.index("[9]") < body.index("[7]")
         assert "Mon 2026-10-26" in body
         assert "Failures: 0" in body and config.ollama_model in body
     assert msg.html.count("Heavy Tails in Crypto Returns") == 1

@@ -5,8 +5,12 @@ A daily digest of newly announced arXiv papers in quantitative finance and stati
 ## Language
 
 **Announcement**:
-One of arXiv's scheduled releases of new papers (Sunday–Thursday evenings, US Eastern), identified by its date. Each Announcement yields at most one Digest.
-_Avoid_: Batch, day, mailing
+One of arXiv's scheduled releases of new papers (Sunday–Thursday evenings, US Eastern), identified by the US-Eastern date of the evening it is released. arXiv's own listings label the same release with the following day. Each Announcement yields at most one Digest.
+_Avoid_: Batch, day, mailing, listing date (arXiv's next-day label)
+
+**Reconstructed Announcement**:
+An Announcement whose Candidates were inferred from submission dates because arXiv no longer offers its record of that release. It may be missing papers that were held for moderation or cross-listed later.
+_Avoid_: Approximate announcement, estimated batch
 
 **Candidate**:
 A paper announced on arXiv for the first time, with a Watched Category as either its primary category or a cross-list, before relevance has been judged. Replacements (revised versions of earlier papers) are never Candidates.
@@ -43,6 +47,10 @@ _Avoid_: Runner-up, honorable mention
 **Digest**:
 The daily email to the reader: the Summaries of that day's Featured Papers, followed by the Overflow Papers as title-only links.
 _Avoid_: Newsletter, report, email
+
+**Late Digest**:
+A Digest sent after its Announcement's cutoff has passed, labelled as late.
+_Avoid_: Backfill email, catch-up digest
 
 **Failure Notice**:
 A short email sent in place of a Digest when an Announcement could not be processed, stating why.
